@@ -1,0 +1,53 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <meta charset='utf-8'/>
+    <script src='worker.js'></script>
+  </head>
+  <body>
+    <div id='info'></div>
+    <br/>
+    <canvas id='c' width='512' height='512'></canvas>
+    <script>
+'use strict';
+
+var USE_WORKER = true;
+
+var info = document.getElementById('info');
+var canvas = document.getElementById('c');
+var worker;
+
+var tickFunc;
+
+if (USE_WORKER) {
+    info.textContent = 'Using WebGL from a Web Worker:';
+
+    worker = new Worker('worker.js');
+    var offscreen = canvas.transferControlToOffscreen();
+    worker.postMessage(['InitCanvas', [offscreen]]);
+} else {
+    info.textContent = 'Using WebGL not from a Web Worker:';
+
+    InitCanvas(canvas);
+}
+
+function Tick() {
+    requestAnimationFrame(Tick);
+
+    var seconds = performance.now() / 1000.0;
+    var val = (seconds / 2.0) % 1.0;
+
+    if (worker) {
+        worker.postMessage(['RenderFrame', [val, val]]);
+    } else {
+        RenderFrame(val, val);
+    }
+
+    return;
+}
+
+requestAnimationFrame(Tick);
+
+    </script>
+  </body>
+</html>

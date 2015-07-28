@@ -1,0 +1,91 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <meta charset='utf-8'/>
+        <style>
+.flex-column {
+    display: flex;
+    flex-flow: column;
+}
+
+.flex-row {
+    display: flex;
+    flex-flow: row;
+}
+
+.view-box {
+}
+
+.view-canvas {
+    width: 256px;
+    height: 256px;
+
+    margin: 1px;
+
+    border: solid;
+    border-width: 1px;
+}
+        </style>
+    </head>
+    <body>
+        <div class='flex-column'>
+            <div class='flex-row'>
+                <div class='view-box'>
+                    Top:
+                    <br/>
+                    <canvas id='top' class='view-canvas'></canvas>
+                </div>
+                <div class='view-box'>
+                    Free:
+                    <br/>
+                    <canvas id='free' class='view-canvas'></canvas>
+                </div>
+            </div>
+            <div class='flex-row'>
+                <div class='view-box'>
+                    Front:
+                    <br/>
+                    <canvas id='front' class='view-canvas'></canvas>
+                </div>
+                <div class='view-box'>
+                    Left:
+                    <br/>
+                    <canvas id='left' class='view-canvas'></canvas>
+                </div>
+            </div>
+        </div>
+        <script>
+'use strict';
+
+var topView   = document.getElementById('top'  ).getContext('bitmaprenderer');
+var freeView  = document.getElementById('free' ).getContext('bitmaprenderer');
+var frontView = document.getElementById('front').getContext('bitmaprenderer');
+var leftView  = document.getElementById('left' ).getContext('bitmaprenderer');
+
+var offscreen = new OffscreenCanvas(512, 512);
+var gl = offscreen.getContext('webgl');
+
+offscreen.commitTo = function(dest) {
+    var bitmap = this.transferToImageBitmap();
+    dest.transferImageBitmap(bitmap);
+}
+
+gl.clearColor(1.0, 0.3, 0.3, 1.0);
+gl.clear(gl.COLOR_BUFFER_BIT);
+offscreen.commitTo(frontView);
+
+gl.clearColor(0.3, 1.0, 0.3, 1.0);
+gl.clear(gl.COLOR_BUFFER_BIT);
+offscreen.commitTo(leftView);
+
+gl.clearColor(0.3, 0.3, 1.0, 1.0);
+gl.clear(gl.COLOR_BUFFER_BIT);
+offscreen.commitTo(topView);
+
+gl.clearColor(1.0, 0.0, 1.0, 1.0);
+gl.clear(gl.COLOR_BUFFER_BIT);
+offscreen.commitTo(freeView);
+
+        </script>
+    </body>
+</html>
