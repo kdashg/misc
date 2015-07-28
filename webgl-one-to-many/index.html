@@ -3,6 +3,12 @@
     <head>
         <meta charset='utf-8'/>
         <style>
+
+html,body {
+  height: 100%;
+  margin: 0px;
+}
+
 .flex-column {
     display: flex;
     flex-flow: column;
@@ -13,45 +19,42 @@
     flex-flow: row;
 }
 
-.view-box {
+.flexed {
+    flex: auto;
 }
 
 .view-canvas {
-    width: 256px;
-    height: 256px;
-
-    margin: 1px;
+    margin: 2px;
 
     border: solid;
     border-width: 1px;
 }
+
         </style>
     </head>
     <body>
-        <div class='flex-column'>
-            <div class='flex-row'>
-                <div class='view-box'>
-                    Top:
-                    <br/>
-                    <canvas id='top' class='view-canvas'></canvas>
-                </div>
-                <div class='view-box'>
-                    Free:
-                    <br/>
-                    <canvas id='free' class='view-canvas'></canvas>
-                </div>
+        <div class='flex-row' style='height: 100%;'>
+            <div class='flex-column' style='width: 30%;'>
+                Top:
+                <br/>
+                <canvas id='top' class='view-canvas flexed'></canvas>
+
+                <br/>
+
+                Front:
+                <br/>
+                <canvas id='front' class='view-canvas flexed'></canvas>
+
+                <br/>
+
+                Left:
+                <br/>
+                <canvas id='left' class='view-canvas flexed'></canvas>
             </div>
-            <div class='flex-row'>
-                <div class='view-box'>
-                    Front:
-                    <br/>
-                    <canvas id='front' class='view-canvas'></canvas>
-                </div>
-                <div class='view-box'>
-                    Left:
-                    <br/>
-                    <canvas id='left' class='view-canvas'></canvas>
-                </div>
+            <div class='flex-column flexed'>
+                Free:
+                <br/>
+                <canvas id='free' class='view-canvas flexed'></canvas>
             </div>
         </div>
         <script>
@@ -65,23 +68,32 @@ var leftView  = document.getElementById('left' ).getContext('bitmaprenderer');
 var offscreen = new OffscreenCanvas(512, 512);
 var gl = offscreen.getContext('webgl');
 
+offscreen.resizeTo = function(dest) {
+    this.width = dest.width;
+    this.height = dest.height;
+};
+
 offscreen.commitTo = function(dest) {
     var bitmap = this.transferToImageBitmap();
     dest.transferImageBitmap(bitmap);
-}
+};
 
+offscreen.resizeTo(frontView);
 gl.clearColor(1.0, 0.3, 0.3, 1.0);
 gl.clear(gl.COLOR_BUFFER_BIT);
 offscreen.commitTo(frontView);
 
+offscreen.resizeTo(leftView);
 gl.clearColor(0.3, 1.0, 0.3, 1.0);
 gl.clear(gl.COLOR_BUFFER_BIT);
 offscreen.commitTo(leftView);
 
+offscreen.resizeTo(topView);
 gl.clearColor(0.3, 0.3, 1.0, 1.0);
 gl.clear(gl.COLOR_BUFFER_BIT);
 offscreen.commitTo(topView);
 
+offscreen.resizeTo(freeView);
 gl.clearColor(1.0, 0.0, 1.0, 1.0);
 gl.clear(gl.COLOR_BUFFER_BIT);
 offscreen.commitTo(freeView);
