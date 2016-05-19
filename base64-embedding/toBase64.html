@@ -1,0 +1,30 @@
+<html>
+<head>
+</head>
+<body>
+    <input id='input' type='file'>
+    <br/>
+    <textarea id='output'></textarea>
+    <script>
+'use strict';
+
+var input = document.getElementById('input');
+var output = document.getElementById('output');
+
+input.addEventListener('change', function(e) {
+    if (!e.target.files.length) {
+        output.value = '';
+        return;
+    }
+
+    var file = e.target.files[0];
+    var fr = new FileReader();
+    fr.addEventListener('load', function() {
+        output.value = this.result;
+    });
+    fr.readAsDataURL(file);
+});
+
+    </script>
+</body>
+</html>
