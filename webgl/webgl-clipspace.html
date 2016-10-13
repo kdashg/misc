@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='UTF-8'>
+  </head>
+  <body>
+    <script id='vs' type='x-shader/x-vertex'>
+
+attribute vec3 aPosition;
+
+void main(void) {
+  gl_PointSize = 50.0;
+  gl_Position = vec4(aPosition, 1.0);
+}
+
+    </script>
+    <script id='fs' type='x-shader/x-fragment'>
+
+precision mediump float;
+
+uniform vec4 uColor;
+
+void main(void) {
+  gl_FragColor = uColor;
+}
+
+    </script>
+    <canvas id='webgl' style='border: none; position: absolute; top: 0px; left: 0px;'></canvas>
+    <script type='text/javascript'>
+
+function GetGLSLByElemId(elemId) {
+  var elem = document.getElementById(elemId);
+  if (!elem)
+    throw 'Bad `elemId`: ' + elemId;
+
+  return elem.innerHTML.trim() + '\n';
+}
+
+function ProgramByElemIds(gl, vsId, fsId) {
+  var vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, GetGLSLByElemId(vsId));
+  gl.compileShader(vs);
+
+  var fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, GetGLSLByElemId(fsId));
+  gl.compileShader(fs);
+
+  var prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+
+  gl.linkProgram(prog);
+
+  var success = gl.getProgramParameter(prog, gl.LINK_STATUS);
+  if (success)
+      return prog;
+
+  console.log('Error linking program for \'' + vsId + '\' and \'' + fsId + '\'.');
+  console.log('\nLink log: ' + gl.getProgramInfoLog(prog));
+  console.log('\nVert shader log: ' + gl.getShaderInfoLog(vs));
+  console.log('\nFrag shader log: ' + gl.getShaderInfoLog(fs));
+  console.log('\nvs source: \n' + gl.getShaderSource(vs));
+  return null;
+}
+
+var gl;
+var prog;
+
+function ASSERT(cond, text) {
+  if (!cond) {
+    alert('Assertion hit: ' + text);
+    throw text;
+  }
+}
+
+// Give ourselves a scope to return early from:
+(function() {
+  var canvas = document.getElementById('webgl');
+  var attribs = {
+    antialias: true,
+    depth: true,
+    stencil: false,
+    preserveDrawingBuffer: true,
+  };
+  gl = canvas.getContext('experimental-webgl', attribs);
+  ASSERT(gl);
+
+  gl.enable(gl.DEPTH_TEST);
+
+  prog = ProgramByElemIds(gl, 'vs', 'fs');
+  ASSERT(prog, 'Basic WebGL2 program links.');
+
+  prog.aPosition = gl.getAttribLocation(prog, 'aPosition');
+  prog.uColor = gl.getUniformLocation(prog, 'uColor');
+
+  gl.useProgram(prog);
+
+  error = gl.getError();
+  ASSERT(error == 0, 'Should be no errors.');
+
+  RenderFrame();
+})();
+
+function RenderFrame() {
+  var error = gl.getError();
+  ASSERT(error == 0, 'Should be no errors.');
+
+  gl.clearColor(0.3, 0.3, 0.3, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  gl.vertexAttrib3f(prog.aPosition, -0.1, -0.1, -0.1);
+  gl.uniform4f(prog.uColor, 1.0, 0.0, 0.0, 1.0);
+  gl.drawArrays(gl.POINTS, 0, 1);
+
+  gl.vertexAttrib3f(prog.aPosition, 0.1, 0.1, 0.1);
+  gl.uniform4f(prog.uColor, 0.0, 1.0, 0.0, 1.0);
+  gl.drawArrays(gl.POINTS, 0, 1);
+
+  gl.vertexAttrib3f(prog.aPosition, 0.0, 0.0, 0.0);
+  gl.uniform4f(prog.uColor, 0.0, 0.0, 1.0, 1.0);
+  gl.drawArrays(gl.POINTS, 0, 1);
+
+  error = gl.getError();
+  ASSERT(error == 0, 'Should be no errors.');
+}
+
+    </script>
+  </body>
+</html>
