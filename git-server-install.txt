@@ -1,0 +1,23 @@
+For arch.
+
+> sudo su # keep it simple
+> pacman -S git
+> cd <git-home-dir>
+> usermod -d `pwd` git
+> usermod -s /usr/bin/git-shell # Disallow shell access.
+> mkdir .ssh
+> touch .ssh/authorized_keys # public keys go in here
+> git init --bare <repo-name> # by convention, bare repos (like for servers, no working directory) end in .git
+> chown -R git:git .
+
+Now on a dev machine:
+> git add remote <name> git@<host>:<repo-name>
+or
+> git clone git@<host>:<repo-name>
+
+For example:
+<git-home-dir>: /mnt/data/git-home
+<repo-name>: foo.git
+<name>: origin
+
+FWIW, the git-remote string is <git-user>@<host>:<repo-path>.
