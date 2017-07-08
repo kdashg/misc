@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='UTF-8'>
+    <script src='matrices.js'></script>
+  </head>
+  <body>
+
+<input type='button' value='Rec601' onclick='setRec601();'>
+<input type='button' value='Rec709' onclick='setRec709();'>
+<br>Kr: <input id='kr'>
+<br>Kg: <input id='kg'>
+<br>Kb: <input id='kb'>
+<br>Range max: <input id='range'>
+<br>Y 0-1: <input id='y0'> - <input id='y1'>
+<br>CbCr 0-0.5: <input id='cbcr0'> - <input id='cbcr05'>
+<br><pre id='rgbToYcbcr'>-</pre>
+<br><pre id='ycbcrToRgb'>-</pre>
+<hr>
+
+RGB: <input type='button' value='From YCbCr' onclick='fromYcbcr();'>
+<input id='r' value='0'> <input id='g' value='255'> <input id='b' value='0'>
+<br>
+YCbCr: <input type='button' value='From RGB' onclick='fromRgb();'>
+<input id='y'> <input id='cb'> <input id='cr'>
+
+<script>
+'strict';
+
+function floatFromInput(elemId) {
+    const elem = document.getElementById(elemId);
+    const val = elem.value;
+    const fval = parseFloat(val);
+    return fval;
+}
+
+function setElemText(elemId, text) {
+    const elem = document.getElementById(elemId);
+    elem.innerText = text;
+}
+
+function setInput(elemId, val) {
+    const elem = document.getElementById(elemId);
+    elem.value = val;
+}
+
+function setRec601() {
+    setInput('kr', '0.299');
+    setInput('kg', '0.587');
+    setInput('kb', '0.114');
+    setInput('range', '255');
+    setInput('y0', '16');
+    setInput('y1', '219');
+    setInput('cbcr0', '128');
+    setInput('cbcr05', '224');
+    calc();
+}
+
+function setRec709() {
+    setInput('kr', '0.2126');
+    setInput('kg', '0.7152');
+    setInput('kb', '0.0722');
+    setInput('range', '255');
+    setInput('y0', '16');
+    setInput('y1', '235');
+    setInput('cbcr0', '128');
+    setInput('cbcr05', '240');
+    calc();
+}
+
+let normalizedMax;
+let rgbToYuv;
+let yuvToYcbcr;
+let rgbToYcbcr;
+let ycbcrToRgb;
+
+function calc() {
+    const kr = floatFromInput('kr');
+    const kg = floatFromInput('kg');
+    const kb = floatFromInput('kb');
+    normalizedMax = floatFromInput('range');
+    const y0 = floatFromInput('y0') / normalizedMax;
+    const y1 = floatFromInput('y1') / normalizedMax;
+    const cbcr0 = floatFromInput('cbcr0') / normalizedMax;
+    const cbcr05 = floatFromInput('cbcr05') / normalizedMax;
+
+    const uRange = 2*(1-kb);
+    const vRange = 2*(1-kr);
+    rgbToYuv = [ [kr, kg, kb, 0],
+                 [-kr/uRange, -kg/uRange, (1-kb)/uRange, 0],
+                 [(1-kr)/vRange, -kg/vRange, -kb/vRange, 0],
+                 [0, 0, 0, 1] ];
+    yuvToYcbcr = [ [y1-y0, 0, 0, y0],
+                   [0, cbcr05-cbcr0, 0, cbcr0],
+                   [0, 0, cbcr05-cbcr0, cbcr0],
+                   [0, 0, 0, 1] ];
+    //console.log('yuvToYcbcr', matString(yuvToYcbcr));
+
+    rgbToYcbcr = matMul(yuvToYcbcr, rgbToYuv);
+    setElemText('rgbToYcbcr', 'rgbToYcbcr = \n' + matString(rgbToYcbcr));
+
+    ycbcrToRgb = matInv(rgbToYcbcr);
+    setElemText('ycbcrToRgb', 'ycbcrToRgb = \n' + matString(ycbcrToRgb));
+
+    //const back = matInv(ycbcrToRgb);
+    //console.log('rgbToYcbcr-1-1', matString(back));
+}
+
+function fromRgb() {
+    const r = floatFromInput('r') / normalizedMax;
+    const g = floatFromInput('g') / normalizedMax;
+    const b = floatFromInput('b') / normalizedMax;
+
+    const rgb = [r, g, b, 1];
+    const ycbcr = matMulVec(rgbToYcbcr, rgb).map(x => Math.round(x*255));
+
+    setInput('y', ycbcr[0]);
+    setInput('cb', ycbcr[1]);
+    setInput('cr', ycbcr[2]);
+}
+
+function fromYcbcr() {
+    const y = floatFromInput('y') / normalizedMax;
+    const cb = floatFromInput('cb') / normalizedMax;
+    const cr = floatFromInput('cr') / normalizedMax;
+
+    const ycbcr = [y, cb, cr, 1];
+    const rgb = matMulVec(ycbcrToRgb, ycbcr).map(x => Math.round(x*255));
+
+    setInput('r', rgb[0]);
+    setInput('g', rgb[1]);
+    setInput('b', rgb[2]);
+}
+
+setRec601();
+fromRgb();
+
+</script>
+
+  </body>
+</html>
