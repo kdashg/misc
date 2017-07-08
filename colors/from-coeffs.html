@@ -8,12 +8,13 @@
 
 <input type='button' value='Rec601' onclick='setRec601();'>
 <input type='button' value='Rec709' onclick='setRec709();'>
+<input type='button' value='Rec2020' onclick='setRec2020();'>
 <br>Kr: <input id='kr'>
 <br>Kg: <input id='kg'>
 <br>Kb: <input id='kb'>
-<br>Range max: <input id='range'>
-<br>Y 0-1: <input id='y0'> - <input id='y1'>
-<br>CbCr 0-0.5: <input id='cbcr0'> - <input id='cbcr05'>
+<br>Bits: <input id='bits'>
+<br>8-bit Y 0-1: <input id='y0'> - <input id='y1'>
+<br>8-bit CbCr 0-0.5: <input id='cbcr0'> - <input id='cbcr05'>
 <br><pre id='rgbToYcbcr'>-</pre>
 <br><pre id='ycbcrToRgb'>-</pre>
 <hr>
@@ -48,7 +49,7 @@ function setRec601() {
     setInput('kr', '0.299');
     setInput('kg', '0.587');
     setInput('kb', '0.114');
-    setInput('range', '255');
+    setInput('bits', '8');
     setInput('y0', '16');
     setInput('y1', '219');
     setInput('cbcr0', '128');
@@ -60,11 +61,23 @@ function setRec709() {
     setInput('kr', '0.2126');
     setInput('kg', '0.7152');
     setInput('kb', '0.0722');
-    setInput('range', '255');
+    setInput('bits', '8');
     setInput('y0', '16');
     setInput('y1', '235');
     setInput('cbcr0', '128');
     setInput('cbcr05', '240');
+    calc();
+}
+
+function setRec2020() {
+    setInput('kr', '0.2627');
+    setInput('kg', '0.6780');
+    setInput('kb', '0.0593');
+    setInput('bits', '10');
+    setInput('y0', '16');
+    setInput('y1', '235'); // spec incorrectly says 219 (from rec601)
+    setInput('cbcr0', '128');
+    setInput('cbcr05', '240'); // spec incorrectly says 224 (from rec601)
     calc();
 }
 
@@ -78,11 +91,12 @@ function calc() {
     const kr = floatFromInput('kr');
     const kg = floatFromInput('kg');
     const kb = floatFromInput('kb');
-    normalizedMax = floatFromInput('range');
-    const y0 = floatFromInput('y0') / normalizedMax;
-    const y1 = floatFromInput('y1') / normalizedMax;
-    const cbcr0 = floatFromInput('cbcr0') / normalizedMax;
-    const cbcr05 = floatFromInput('cbcr05') / normalizedMax;
+    const bits = floatFromInput('bits');
+    normalizedMax = (1 << bits) - 1;
+    const y0 = floatFromInput('y0') / 255;
+    const y1 = floatFromInput('y1') / 255;
+    const cbcr0 = floatFromInput('cbcr0') / 255;
+    const cbcr05 = floatFromInput('cbcr05') / 255;
 
     const uRange = 2*(1-kb);
     const vRange = 2*(1-kr);
@@ -112,7 +126,7 @@ function fromRgb() {
     const b = floatFromInput('b') / normalizedMax;
 
     const rgb = [r, g, b, 1];
-    const ycbcr = matMulVec(rgbToYcbcr, rgb).map(x => Math.round(x*255));
+    const ycbcr = matMulVec(rgbToYcbcr, rgb).map(x => Math.round(x*normalizedMax));
 
     setInput('y', ycbcr[0]);
     setInput('cb', ycbcr[1]);
@@ -125,7 +139,7 @@ function fromYcbcr() {
     const cr = floatFromInput('cr') / normalizedMax;
 
     const ycbcr = [y, cb, cr, 1];
-    const rgb = matMulVec(ycbcrToRgb, ycbcr).map(x => Math.round(x*255));
+    const rgb = matMulVec(ycbcrToRgb, ycbcr).map(x => Math.round(x*normalizedMax));
 
     setInput('r', rgb[0]);
     setInput('g', rgb[1]);
