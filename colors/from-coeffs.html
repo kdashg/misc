@@ -12,9 +12,12 @@
 <br>Kr: <input id='kr'>
 <br>Kg: <input id='kg'>
 <br>Kb: <input id='kb'>
-<br>Bits: <input id='bits'>
-<br>8-bit Y 0-1: <input id='y0'> - <input id='y1'>
-<br>8-bit CbCr 0-1: <input id='cbcr0'> - <input id='cbcr1'>
+<br>Bits: <input id='bits'> (use 1 for floats)
+<br>Range:
+<select id='range-type'>
+    <option value='narrow' selected>Narrow (y: 16-235, cbcr: 16-128-240)</option>
+    <option value='full'>Full (y: 0-255, cbcr: 1-128-255)</option>
+</select>
 <br><input type='button' value='recalc' onclick='recalc();'>
 <br><pre id='rgbToYcbcr'>-</pre>
 <br><pre id='ycbcrToRgb'>-</pre>
@@ -27,7 +30,7 @@ YCbCr: <input type='button' value='From RGB' onclick='fromRgb();'>
 <input id='y'> <input id='cb'> <input id='cr'>
 
 <script>
-'strict';
+'use strict';
 
 function floatFromInput(elemId) {
     const elem = document.getElementById(elemId);
@@ -51,10 +54,6 @@ function setRec601() {
     setInput('kg', '0.587');
     setInput('kb', '0.114');
     setInput('bits', '8');
-    setInput('y0', '16');
-    setInput('y1', '235');
-    setInput('cbcr0', '128');
-    setInput('cbcr1', '240');
     recalc();
 }
 
@@ -63,10 +62,6 @@ function setRec709() {
     setInput('kg', '0.7152');
     setInput('kb', '0.0722');
     setInput('bits', '8');
-    setInput('y0', '16');
-    setInput('y1', '235');
-    setInput('cbcr0', '128');
-    setInput('cbcr1', '240');
     recalc();
 }
 
@@ -75,14 +70,23 @@ function setRec2020() {
     setInput('kg', '0.6780');
     setInput('kb', '0.0593');
     setInput('bits', '10');
-    setInput('y0', '16');
-    setInput('y1', '235');
-    setInput('cbcr0', '128');
-    setInput('cbcr1', '240');
     recalc();
 }
 
-let normalizedMax;
+const narrowRange = {
+    y0: 16,
+    y1: 235, // 16+219
+    cbcr0: 128,
+    cbcr1: 240, // 128+224/2
+};
+const fullRange = {
+    y0: 0,
+    y1: 255,
+    cbcr0: 128,
+    cbcr1: 255,
+};
+
+let normalizer;
 let rgbToYuv;
 let yuvToYcbcr;
 let rgbToYcbcr;
@@ -92,12 +96,17 @@ function recalc() {
     const kr = floatFromInput('kr');
     const kg = floatFromInput('kg');
     const kb = floatFromInput('kb');
-    const bits = floatFromInput('bits');
-    normalizedMax = (1 << bits) - 1;
-    const y0 = floatFromInput('y0') / 255;
-    const y1 = floatFromInput('y1') / 255;
-    const cbcr0 = floatFromInput('cbcr0') / 255;
-    const cbcr1 = floatFromInput('cbcr1') / 255;
+
+    const rangeType = document.getElementById('range-type').value;
+    let range = narrowRange;
+    if (rangeType == 'full') {
+        range = fullRange;
+    }
+
+    const y0 = range.y0 / 255;
+    const y1 = range.y1 / 255;
+    const cbcr0 = range.cbcr0 / 255;
+    const cbcr1 = range.cbcr1 / 255;
 
     const uRange = 1-kb;
     const vRange = 1-kr;
@@ -109,7 +118,6 @@ function recalc() {
                    [0, cbcr1-cbcr0, 0, cbcr0],
                    [0, 0, cbcr1-cbcr0, cbcr0],
                    [0, 0, 0, 1] ];
-    //console.log('yuvToYcbcr', matString(yuvToYcbcr));
 
     rgbToYcbcr = matMul(yuvToYcbcr, rgbToYuv);
     setElemText('rgbToYcbcr', 'rgbToYcbcr = \n' + matString(rgbToYcbcr));
@@ -121,27 +129,46 @@ function recalc() {
     //console.log('rgbToYcbcr-1-1', matString(back));
 }
 
+function convertByMatrix(a3, aToB) {
+    const bits = floatFromInput('bits');
+    const normalizer = (1 << bits) - 1;
+    const points = (normalizer == 1) ? 5 : 0;
+
+    const a4 = [
+        a3[0] / normalizer,
+        a3[1] / normalizer,
+        a3[2] / normalizer,
+        1,
+    ];
+
+    const b4 = matMulVec(aToB, a4).map(x => (x*normalizer).toFixed(points));
+    return [
+        b4[0],
+        b4[1],
+        b4[2],
+    ];
+}
+
+
 function fromRgb() {
-    const r = floatFromInput('r') / normalizedMax;
-    const g = floatFromInput('g') / normalizedMax;
-    const b = floatFromInput('b') / normalizedMax;
-
-    const rgb = [r, g, b, 1];
-    const ycbcr = matMulVec(rgbToYcbcr, rgb).map(x => Math.round(x*normalizedMax));
-
+    const rgb = [
+        floatFromInput('r'),
+        floatFromInput('g'),
+        floatFromInput('b'),
+    ];
+    const ycbcr = convertByMatrix(rgb, rgbToYcbcr);
     setInput('y', ycbcr[0]);
     setInput('cb', ycbcr[1]);
     setInput('cr', ycbcr[2]);
 }
 
 function fromYcbcr() {
-    const y = floatFromInput('y') / normalizedMax;
-    const cb = floatFromInput('cb') / normalizedMax;
-    const cr = floatFromInput('cr') / normalizedMax;
-
-    const ycbcr = [y, cb, cr, 1];
-    const rgb = matMulVec(ycbcrToRgb, ycbcr).map(x => Math.round(x*normalizedMax));
-
+    const ycbcr = [
+        floatFromInput('y'),
+        floatFromInput('cb'),
+        floatFromInput('cr'),
+    ];
+    const rgb = convertByMatrix(ycbcr, ycbcrToRgb);
     setInput('r', rgb[0]);
     setInput('g', rgb[1]);
     setInput('b', rgb[2]);
