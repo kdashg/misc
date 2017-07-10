@@ -135,20 +135,19 @@ function convertByMatrix(a3, aToB) {
     const points = (normalizer == 1) ? 5 : 0;
 
     const a4 = [
-        a3[0] / normalizer,
-        a3[1] / normalizer,
-        a3[2] / normalizer,
-        1,
-    ];
+        a3[0],
+        a3[1],
+        a3[2],
+        normalizer,
+    ].map(x => x/normalizer);
 
-    const b4 = matMulVec(aToB, a4).map(x => (x*normalizer).toFixed(points));
+    const b4 = matMulVec(aToB, a4);
     return [
         b4[0],
         b4[1],
         b4[2],
-    ];
+    ].map(x => (x*normalizer).toFixed(points));
 }
-
 
 function fromRgb() {
     const rgb = [
