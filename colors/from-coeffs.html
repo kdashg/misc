@@ -129,48 +129,31 @@ function recalc() {
     //console.log('rgbToYcbcr-1-1', matString(back));
 }
 
-function convertByMatrix(a3, aToB) {
+function convert(srcIds, srcToDest, destIds) {
     const bits = floatFromInput('bits');
     const normalizer = (1 << bits) - 1;
     const points = (normalizer == 1) ? 5 : 0;
 
-    const a4 = [
-        a3[0],
-        a3[1],
-        a3[2],
-        normalizer,
-    ].map(x => x/normalizer);
+    let src = srcIds.map(x => floatFromInput(x) / normalizer);
+    src.push(1);
 
-    const b4 = matMulVec(aToB, a4);
-    return [
-        b4[0],
-        b4[1],
-        b4[2],
-    ].map(x => (x*normalizer).toFixed(points));
+    const dest = matMulVec(srcToDest, src);
+    for (let i = 0; i < 3; i++) {
+        const str = (dest[i]*normalizer).toFixed(points);
+        setInput(destIds[i], str);
+    }
 }
 
 function fromRgb() {
-    const rgb = [
-        floatFromInput('r'),
-        floatFromInput('g'),
-        floatFromInput('b'),
-    ];
-    const ycbcr = convertByMatrix(rgb, rgbToYcbcr);
-    setInput('y', ycbcr[0]);
-    setInput('cb', ycbcr[1]);
-    setInput('cr', ycbcr[2]);
+    convert(['r', 'g', 'b'],
+            rgbToYcbcr,
+            ['y', 'cb', 'cr']);
 }
 
 function fromYcbcr() {
-    const ycbcr = [
-        floatFromInput('y'),
-        floatFromInput('cb'),
-        floatFromInput('cr'),
-    ];
-    const rgb = convertByMatrix(ycbcr, ycbcrToRgb);
-    setInput('r', rgb[0]);
-    setInput('g', rgb[1]);
-    setInput('b', rgb[2]);
+    convert(['y', 'cb', 'cr'],
+            ycbcrToRgb,
+            ['r', 'g', 'b']);
 }
 
 setRec601();
