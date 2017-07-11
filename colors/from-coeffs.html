@@ -18,6 +18,11 @@
     <option value='narrow' selected>Narrow (y: 16-235, cbcr: 16-128-240)</option>
     <option value='full'>Full (y: 0-255, cbcr: 1-128-255)</option>
 </select>
+<br>Array order:
+<select id='array-major'>
+    <option value='row' selected>Row-major (common)</option>
+    <option value='column'>Column-major (for OpenGL)</option>
+</select>
 <br><input type='button' value='recalc' onclick='recalc();'>
 <br><pre id='rgbToYcbcr'>-</pre>
 <br><pre id='ycbcrToRgb'>-</pre>
@@ -119,14 +124,20 @@ function recalc() {
                    [0, 0, cbcr1-cbcr0, cbcr0],
                    [0, 0, 0, 1] ];
 
+    const arrayMajor = document.getElementById('array-major').value;
+    let fnMatToString = matString;
+    if (arrayMajor === 'column') {
+        fnMatToString = x => matString(matTrans(x));
+    }
+
     rgbToYcbcr = matMul(yuvToYcbcr, rgbToYuv);
-    setElemText('rgbToYcbcr', 'rgbToYcbcr = \n' + matString(rgbToYcbcr));
+    setElemText('rgbToYcbcr', 'rgbToYcbcr = \n' + fnMatToString(rgbToYcbcr));
 
     ycbcrToRgb = matInv(rgbToYcbcr);
-    setElemText('ycbcrToRgb', 'ycbcrToRgb = \n' + matString(ycbcrToRgb));
+    setElemText('ycbcrToRgb', 'ycbcrToRgb = \n' + fnMatToString(ycbcrToRgb));
 
     //const back = matInv(ycbcrToRgb);
-    //console.log('rgbToYcbcr-1-1', matString(back));
+    //console.log('rgbToYcbcr-1-1', fnMatToString(back));
 }
 
 function convert(srcIds, srcToDest, destIds) {
