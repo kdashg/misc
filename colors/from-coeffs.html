@@ -16,7 +16,7 @@
 <br>Range:
 <select id='range-type'>
     <option value='narrow' selected>Narrow (y: 16-235, cbcr: 16-128-240)</option>
-    <option value='full'>Full (y: 0-255, cbcr: 1-128-255)</option>
+    <option value='full'>Full (y: 0-255, cbcr: 0-255)</option>
 </select>
 <br>Array order:
 <select id='array-major'>
@@ -87,7 +87,7 @@ const narrowRange = {
 const fullRange = {
     y0: 0,
     y1: 255,
-    cbcr0: 128,
+    cbcr0: 127.5,
     cbcr1: 255,
 };
 
