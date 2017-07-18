@@ -83,13 +83,14 @@ function matDet(m) {
     return ret;
 }
 
-function matString(m) {
+function matString(m, precision) {
+    precision = precision || 5;
     const rows = [];
     const n = m[0].length;
     for (let i = 0; i < n; i++) {
         const row = matRow(m, i);
         const format = function(x) {
-            let str = x.toFixed(5);
+            let str = x.toFixed(precision);
             if (str[0] != '-')
                 str = ' ' + str;
             return str;

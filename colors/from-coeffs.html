@@ -23,6 +23,7 @@
     <option value='row' selected>Row-major (common)</option>
     <option value='column'>Column-major (for OpenGL)</option>
 </select>
+<br>Precision: <input id='precision' value='5'>
 <br><input type='button' value='recalc' onclick='recalc();'>
 <br><pre id='rgbToYcbcr'>-</pre>
 <br><pre id='ycbcrToRgb'>-</pre>
@@ -107,6 +108,7 @@ function recalc() {
     if (rangeType == 'full') {
         range = fullRange;
     }
+    const precision = floatFromInput('precision') | 0;
 
     const y0 = range.y0 / 255;
     const y1 = range.y1 / 255;
@@ -127,14 +129,14 @@ function recalc() {
     const arrayMajor = document.getElementById('array-major').value;
     let fnMatToString = matString;
     if (arrayMajor === 'column') {
-        fnMatToString = x => matString(matTrans(x));
+        fnMatToString = (x,y) => matString(matTrans(x), y);
     }
 
     rgbToYcbcr = matMul(yuvToYcbcr, rgbToYuv);
-    setElemText('rgbToYcbcr', 'rgbToYcbcr = \n' + fnMatToString(rgbToYcbcr));
+    setElemText('rgbToYcbcr', 'rgbToYcbcr = \n' + fnMatToString(rgbToYcbcr, precision));
 
     ycbcrToRgb = matInv(rgbToYcbcr);
-    setElemText('ycbcrToRgb', 'ycbcrToRgb = \n' + fnMatToString(ycbcrToRgb));
+    setElemText('ycbcrToRgb', 'ycbcrToRgb = \n' + fnMatToString(ycbcrToRgb, precision));
 
     //const back = matInv(ycbcrToRgb);
     //console.log('rgbToYcbcr-1-1', fnMatToString(back));
