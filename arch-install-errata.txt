@@ -39,3 +39,10 @@ $ startx (when desired)
 
 lockscreen:
 $ pacman -S slock
+
+no boot menu:
+Comment out both "UI" directives in /boot/syslinux/syslinux.cfg
+
+disable terminal beep:
+$ echo 'set bell-style none' > ~/.inputrc
+$ bash (to refresh)
