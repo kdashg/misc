@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='UTF-8'>
+  </head>
+  <body>
+    <script id='vs' type='none'>
+//#define ORIGIN_TOP_LEFT
+attribute vec2 aScreenCoord; // [0...1]
+varying vec2 vScreenCoord; // [0...1]
+void main() {
+  gl_Position = vec4(2.0*aScreenCoord - 1.0, 0, 1); // [-1...1]
+#ifdef ORIGIN_TOP_LEFT
+  gl_Position.y *= -1;
+#endif
+  vScreenCoord = aScreenCoord;
+}
+    </script>
+    <script id='fs' type='none'>
+precision mediump float;
+
+varying vec2 vScreenCoord; // [0...1]
+
+void main(void) {
+  gl_FragColor = vec4(vScreenCoord, 0, 1);
+}
+    </script>
+    <canvas id='webgl' width=256 height=256></canvas>
+    <br>Scissor xMax: <input id='scissor1' type='range' min=0 max=10000>
+    <br>Viewport xMax: <input id='viewport1' type='range' min=0 max=10000>
+    <script type='text/javascript'>
+
+function GetGLSLByElemId(elemId) {
+  var elem = document.getElementById(elemId);
+  if (!elem)
+    throw 'Bad `elemId`: ' + elemId;
+
+  return elem.innerHTML.trim() + '\n';
+}
+
+function ProgramByElemIds(gl, vsId, fsId) {
+  var vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, GetGLSLByElemId(vsId));
+  gl.compileShader(vs);
+
+  var fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, GetGLSLByElemId(fsId));
+  gl.compileShader(fs);
+
+  var prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.deleteShader(vs);
+  gl.deleteShader(fs);
+
+  gl.linkProgram(prog);
+
+  var success = gl.getProgramParameter(prog, gl.LINK_STATUS);
+  if (success)
+      return prog;
+
+  console.log('Error linking program for \'' + vsId + '\' and \'' + fsId + '\'.');
+  console.log('\nLink log: ' + gl.getProgramInfoLog(prog));
+  console.log('\nVert shader log: ' + gl.getShaderInfoLog(vs));
+  console.log('\nFrag shader log: ' + gl.getShaderInfoLog(fs));
+  console.log('\nvs source: \n' + gl.getShaderSource(vs));
+  return null;
+}
+
+function ASSERT(cond, text) {
+  if (!cond) {
+    text = 'Assertion hit: ' + text;
+    console.log(text);
+    alert(text);
+    throw GiveMeStackTracePlease;
+  }
+}
+
+// Give ourselves a scope to return early from:
+const canvas = document.getElementById('webgl');
+const gl = canvas.getContext('experimental-webgl');
+ASSERT(gl);
+
+const prog = ProgramByElemIds(gl, 'vs', 'fs');
+ASSERT(prog, 'Basic program links.');
+
+prog.aScreenCoord = gl.getAttribLocation(prog, 'aScreenCoord');
+
+error = gl.getError();
+ASSERT(error == 0, 'Should be no errors: ' + error.toString(16));
+
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+
+let vertData = [
+  0, 0,
+  1, 0,
+  0, 1,
+  1, 1,
+];
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertData), gl.STATIC_DRAW);
+gl.vertexAttribPointer(prog.aScreenCoord, 2, gl.FLOAT, false, 0, 0);
+gl.enableVertexAttribArray(prog.aScreenCoord);
+
+const scissor1 = document.querySelector('#scissor1');
+const viewport1 = document.querySelector('#viewport1');
+
+gl.useProgram(prog);
+
+function draw() {
+  gl.disable(gl.SCISSOR_TEST);
+  gl.clear(gl.COLOR_BUFFER_BIT)
+  gl.enable(gl.SCISSOR_TEST);
+
+  //console.log(scissor1.value);
+  //console.log(viewport1.value);
+  const scissor1Val = scissor1.value / 10000.0;
+  const viewport1Val = viewport1.value / 10000.0;
+  gl.scissor(0, 0, scissor1Val * gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.viewport(0, 0, viewport1Val * gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  error = gl.getError();
+  ASSERT(error == 0, 'Should be no errors: ' + error.toString(16));
+
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+error = gl.getError();
+ASSERT(error == 0, 'Should be no errors: ' + error.toString(16));
+
+    </script>
+  </body>
+</html>
