@@ -6,18 +6,31 @@
     </head>
     <body>
         <style>
+body {
+    font-family: sans-serif;
+}
 #table {
     display: flex;
     flex-direction: column;
 }
 #table > * {
+    padding-left: 16px;
     border: 1px solid;
+}
+h3 {
+    margin-bottom: 4px;
+}
+ul {
+    margin-top: 4px;
 }
 .ok {
     background-color: LightGreen;
 }
 .fail {
     background-color: Orange;
+}
+.new {
+    font-weight: bold;
 }
         </style>
         <div id='table'></div>
@@ -27,13 +40,18 @@ WebGLFeatureLevels.VERBOSE = 1;
 const gl1 = document.createElement('canvas').getContext('experimental-webgl');
 const gl2 = document.createElement('canvas').getContext('webgl2');
 
-function chooseClass(expr) {
-    return ' class="' + (expr ? 'ok' : 'fail') + '"';
+function classText(isOk, isNew) {
+    const list = [ isOk ? 'ok' : 'fail' ];
+    if (isNew) {
+        list.push('new');
+    }
+    return ' class="' + list.join(' ') + '"';
 }
 
 for (let level in WebGLFeatureLevels.kLevels) {
     const gl = (level >= 200) ? gl2 : gl1;
     const kLevel = WebGLFeatureLevels.kLevels[level];
+    const prevLevel = WebGLFeatureLevels.kLevels[level-1];
 
     let failures;
     if (gl) {
@@ -43,21 +61,22 @@ for (let level in WebGLFeatureLevels.kLevels) {
     // --
 
     const extItems = kLevel.exts.map(function(name) {
-        return '<li' + chooseClass(gl && (!failures || failures.exts.indexOf(name) === -1)) + '>' + name;
+        const isOk = gl && (!failures || failures.exts.indexOf(name) === -1);
+        const isNew = prevLevel === undefined || prevLevel.exts.indexOf(name) === -1;
+        return '<li' + classText(isOk, isNew) + '>' + name;
     });
 
-    function limitToStr(x) {
-        if (x instanceof Array)
-            return '[' + x.join(', ') + ']';
-        return x;
-    }
     const limitItems = Object.keys(kLevel.limits).map(function(k) {
         const req = kLevel.limits[k];
-        const ok = gl && (!failures || failures.limits[k] === undefined);
-        let text = '<li' + chooseClass(ok) + '>' + k + ': ' + limitToStr(req);
+        const isOk = gl && (!failures || failures.limits[k] === undefined);
+        const reqStr = JSON.stringify(req);
+        const isNew = (prevLevel === undefined ||
+                       prevLevel.limits[k] === undefined ||
+                       JSON.stringify(prevLevel.limits[k]) != reqStr);
+        let text = '<li' + classText(isOk, isNew) + '>' + k + ': ' + reqStr;
         const has = failures ? failures.limits[k] : undefined;
         if (has !== undefined) {
-            text += ' (has ' + limitToStr(has) + ')';
+            text += ' (has ' + JSON.stringify(has) + ')';
         }
         return text;
     });
@@ -70,14 +89,14 @@ for (let level in WebGLFeatureLevels.kLevels) {
 
     if (extItems.length) {
         lines = lines.concat(
-            [ 'Extensions:<ul>' ],
+            [ '<h3>Extensions:</h3><ul>' ],
             extItems,
             [ '</ul>' ]
         );
     }
     if (limitItems.length) {
         lines = lines.concat(
-            [ 'Limits:<ul>' ],
+            [ '<h3>Limits:</h3><ul>' ],
             limitItems,
             [ '</ul>' ]
         );
