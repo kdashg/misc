@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset='utf-8'>
+        <script src='webgl-feature-levels.js'></script>
+    </head>
+    <body>
+        <style>
+#table {
+    display: flex;
+    flex-direction: column;
+}
+#table > * {
+    border: 1px solid;
+}
+.ok {
+    background-color: LightGreen;
+}
+.fail {
+    background-color: Orange;
+}
+        </style>
+        <div id='table'></div>
+        <script>
+WebGLFeatureLevels.VERBOSE = 1;
+
+const gl1 = document.createElement('canvas').getContext('experimental-webgl');
+const gl2 = document.createElement('canvas').getContext('webgl2');
+
+function chooseClass(expr) {
+    return ' class="' + (expr ? 'ok' : 'fail') + '"';
+}
+
+for (let level in WebGLFeatureLevels.kLevels) {
+    const gl = (level >= 200) ? gl2 : gl1;
+    const kLevel = WebGLFeatureLevels.kLevels[level];
+
+    let failures;
+    if (gl) {
+        failures = WebGLFeatureLevels.probeLevelFailures(gl, level);
+    }
+
+    // --
+
+    const extItems = kLevel.exts.map(function(name) {
+        return '<li' + chooseClass(gl && (!failures || failures.exts.indexOf(name) === -1)) + '>' + name;
+    });
+
+    function limitToStr(x) {
+        if (x instanceof Array)
+            return '[' + x.join(', ') + ']';
+        return x;
+    }
+    const limitItems = Object.keys(kLevel.limits).map(function(k) {
+        const req = kLevel.limits[k];
+        const ok = gl && (!failures || failures.limits[k] === undefined);
+        let text = '<li' + chooseClass(ok) + '>' + k + ': ' + limitToStr(req);
+        const has = failures ? failures.limits[k] : undefined;
+        if (has !== undefined) {
+            text += ' (has ' + limitToStr(has) + ')';
+        }
+        return text;
+    });
+
+    // --
+
+    let lines = [
+        '<h2>Feature Level ' + level + '</h2>',
+    ];
+
+    if (extItems.length) {
+        lines = lines.concat(
+            [ 'Extensions:<ul>' ],
+            extItems,
+            [ '</ul>' ]
+        );
+    }
+    if (limitItems.length) {
+        lines = lines.concat(
+            [ 'Limits:<ul>' ],
+            limitItems,
+            [ '</ul>' ]
+        );
+    }
+
+    const elem = document.createElement('div');
+    elem.classList.add((gl && !failures) ? 'ok' : 'fail');
+    elem.innerHTML = lines.join('\n');
+    table.appendChild(elem);
+}
+        </script>
+    </body>
+</html>
