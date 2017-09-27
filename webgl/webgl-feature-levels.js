@@ -50,6 +50,7 @@ WebGLFeatureLevels = (function() {
             'OES_texture_float_linear',
             'OES_texture_half_float',
             'OES_texture_half_float_linear',
+            //'OES_vertex_array_object', // no Edge
             'WEBGL_depth_texture',
         ]),
         limits: concatObj(kLevels[101].limits, {
@@ -60,10 +61,23 @@ WebGLFeatureLevels = (function() {
     kLevels[103] = {
         exts: kLevels[102].exts.concat([
             'EXT_blend_minmax', // no Edge
-            'OES_vertex_array_object', // no Edge
+            'EXT_shader_texture_lod',
+            'EXT_sRGB',
             'WEBGL_draw_buffers', // no Edge
         ]),
         limits: concatObj(kLevels[102].limits, {
+            MAX_CUBE_MAP_TEXTURE_SIZE: 8192,
+            MAX_RENDERBUFFER_SIZE: 8192,
+            MAX_TEXTURE_SIZE: 8192,
+            MAX_VIEWPORT_DIMS: [8192, 8192],
+
+            MAX_VERTEX_TEXTURE_IMAGE_UNITS: 16,
+            MAX_TEXTURE_IMAGE_UNITS: 16,
+            MAX_COMBINED_TEXTURE_IMAGE_UNITS: 16,
+
+            MAX_VERTEX_UNIFORM_VECTORS: 251,
+            MAX_VARYING_VECTORS: 9,
+            MAX_FRAGMENT_UNIFORM_VECTORS: 221,
         }),
     };
     kLevels[200] = {
