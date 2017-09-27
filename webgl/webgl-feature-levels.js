@@ -122,12 +122,20 @@ WebGLFeatureLevels = (function() {
             const has = gl.getParameter(gl[k]);
 
             let ok = true;
-            if (req instanceof Array) {
-                for (let i = 0; i < req.length; i++) {
-                    ok &= has[i] >= req[i];
-                }
-            } else {
+            switch (k) {
+            case 'MAX_VIEWPORT_DIMS':
+                ok &= has[0] >= req[0];
+                ok &= has[1] >= req[1];
+                break;
+            case 'ALIASED_POINT_SIZE_RANGE':
+                ok &= has[0] <= req[0];
+                ok &= has[1] >= req[1];
+                break;
+            default:
+                if (req instanceof Array)
+                    throw 'Limit key ' + k + ' not handled properly.';
                 ok &= has >= req;
+                break;
             }
             if (ok)
                 continue;
