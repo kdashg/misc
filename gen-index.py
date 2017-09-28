@@ -57,7 +57,7 @@ body.add("<h1><a href='{}'>Gen-Index:</a>".format(src_url))
 dir_list = body.add('<ul>')
 
 for (cur, dirs, files) in os.walk('./'):
-    dirs = filter(lambda x: x[0] != '.', dirs)
+    dirs[:] = filter(lambda x: x[0] != '.', dirs)
     files = filter(lambda x: x[0] != '.', files)
 
     htmls = filter(lambda x: x.endswith('.html'), files)
