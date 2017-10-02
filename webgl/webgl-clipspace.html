@@ -1,21 +1,18 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset='UTF-8'>
+    <meta charset='utf-8'>
   </head>
   <body>
-    <script id='vs' type='x-shader/x-vertex'>
-
+    <script id='vs' type='none'>
 attribute vec3 aPosition;
 
 void main(void) {
   gl_PointSize = 50.0;
   gl_Position = vec4(aPosition, 1.0);
 }
-
     </script>
-    <script id='fs' type='x-shader/x-fragment'>
-
+    <script id='fs' type='none'>
 precision mediump float;
 
 uniform vec4 uColor;
@@ -23,48 +20,9 @@ uniform vec4 uColor;
 void main(void) {
   gl_FragColor = uColor;
 }
-
     </script>
-    <canvas id='webgl' style='border: none; position: absolute; top: 0px; left: 0px;'></canvas>
-    <script type='text/javascript'>
-
-function GetGLSLByElemId(elemId) {
-  var elem = document.getElementById(elemId);
-  if (!elem)
-    throw 'Bad `elemId`: ' + elemId;
-
-  return elem.innerHTML.trim() + '\n';
-}
-
-function ProgramByElemIds(gl, vsId, fsId) {
-  var vs = gl.createShader(gl.VERTEX_SHADER);
-  gl.shaderSource(vs, GetGLSLByElemId(vsId));
-  gl.compileShader(vs);
-
-  var fs = gl.createShader(gl.FRAGMENT_SHADER);
-  gl.shaderSource(fs, GetGLSLByElemId(fsId));
-  gl.compileShader(fs);
-
-  var prog = gl.createProgram();
-  gl.attachShader(prog, vs);
-  gl.attachShader(prog, fs);
-
-  gl.linkProgram(prog);
-
-  var success = gl.getProgramParameter(prog, gl.LINK_STATUS);
-  if (success)
-      return prog;
-
-  console.log('Error linking program for \'' + vsId + '\' and \'' + fsId + '\'.');
-  console.log('\nLink log: ' + gl.getProgramInfoLog(prog));
-  console.log('\nVert shader log: ' + gl.getShaderInfoLog(vs));
-  console.log('\nFrag shader log: ' + gl.getShaderInfoLog(fs));
-  console.log('\nvs source: \n' + gl.getShaderSource(vs));
-  return null;
-}
-
-var gl;
-var prog;
+    <canvas id='canvas'></canvas>
+    <script>
 
 function ASSERT(cond, text) {
   if (!cond) {
@@ -73,9 +31,53 @@ function ASSERT(cond, text) {
   }
 }
 
+function linkProgramByIds(gl, vsId, fsId) {
+  let prog = gl.createProgram();
+
+  function attachShaderById(type, shaderId) {
+    let elem = document.getElementById(shaderId);
+    let glsl = elem.innerHTML.trim() + '\n';
+
+    let shader = gl.createShader(type);
+    gl.shaderSource(shader, glsl);
+    gl.compileShader(shader);
+    gl.attachShader(prog, shader);
+    prog[shaderId] = shader;
+  }
+  attachShaderById(gl.VERTEX_SHADER, vsId);
+  attachShaderById(gl.FRAGMENT_SHADER, fsId);
+
+  gl.linkProgram(prog);
+
+  let success = gl.getProgramParameter(prog, gl.LINK_STATUS);
+  if (!success) {
+    console.log('Error linking program for \'' + vsId + '\' and \'' + fsId + '\'.');
+    console.log('\nLink log: ' + gl.getProgramInfoLog(prog));
+    console.log('\nVert shader log: ' + gl.getShaderInfoLog(prog[vsId]));
+    console.log('\nFrag shader log: ' + gl.getShaderInfoLog(prog[fsId]));
+    return null;
+  }
+  gl.deleteShader(prog[vsId]);
+  gl.deleteShader(prog[fsId]);
+
+  let count = gl.getProgramParameter(prog, gl.ACTIVE_ATTRIBUTES);
+  for (let i = 0; i < count; i++) {
+    const info = gl.getActiveAttrib(prog, i);
+    prog[info.name] = gl.getAttribLocation(prog, info.name);
+  }
+  count = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < count; i++) {
+    const info = gl.getActiveUniform(prog, i);
+    prog[info.name] = gl.getUniformLocation(prog, info.name);
+  }
+  return prog;
+}
+
+var gl;
+var prog;
+
 // Give ourselves a scope to return early from:
 (function() {
-  var canvas = document.getElementById('webgl');
   var attribs = {
     antialias: true,
     depth: true,
@@ -87,11 +89,8 @@ function ASSERT(cond, text) {
 
   gl.enable(gl.DEPTH_TEST);
 
-  prog = ProgramByElemIds(gl, 'vs', 'fs');
-  ASSERT(prog, 'Basic WebGL2 program links.');
-
-  prog.aPosition = gl.getAttribLocation(prog, 'aPosition');
-  prog.uColor = gl.getUniformLocation(prog, 'uColor');
+  prog = linkProgramByIds(gl, 'vs', 'fs');
+  ASSERT(prog, 'Program should link.');
 
   gl.useProgram(prog);
 
