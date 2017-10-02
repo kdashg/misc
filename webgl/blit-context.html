@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <script src='blit-context.js'></script>
+  </head>
+  <body>
+    <canvas id='srcCanvas'></canvas>
+    <hr>
+    <canvas id='destCanvas'></canvas>
+    <script>
+
+srcCanvas.width = 160;
+srcCanvas.height = 90;
+const gl = srcCanvas.getContext('experimental-webgl');
+gl.clearColor(0, 1, 0, 1);
+gl.clear(gl.COLOR_BUFFER_BIT);
+gl.enable(gl.SCISSOR_TEST);
+gl.scissor(0, 0, 50, 50);
+gl.clearColor(0, 0, 1, 1);
+gl.clear(gl.COLOR_BUFFER_BIT);
+
+destCanvas.width = 160;
+destCanvas.height = 100;
+const blit = destCanvas.getContext('blit');
+blit.clear(1, 0, 1);
+blit.blit(gl.canvas, [3,3]);
+
+    </script>
+  </body>
+</html>
