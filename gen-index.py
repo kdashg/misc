@@ -83,6 +83,14 @@ for (cur, dirs, files) in os.walk('./'):
         if clean_path:
             url = clean_path + '/' + url
         print(url)
+
+        try:
+            (name, ext) = url.rsplit('.', 1)
+            if ext == 'md':
+                url = '{}.html'.format(name)
+        except ValueError:
+            pass
+
         file_item.add("<a href='{}'>{}".format(url, x))
 
 index_template = string.Template('''<!DOCTYPE html>
