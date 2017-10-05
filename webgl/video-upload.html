@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='UTF-8'>
+  </head>
+  <body>
+    <script id='vs' type='none'>
+#define ORIGIN_TOP_LEFT
+attribute vec2 aCoord; // [0...1]
+uniform vec2 uOffset;
+varying vec2 vCoord; // [0...1]
+void main() {
+  gl_Position = vec4(2.0*aCoord - 1.0, 0, 1); // [-1...1]
+  gl_Position.x *= 0.7;
+  gl_Position.y *= 0.7;
+#ifdef ORIGIN_TOP_LEFT
+  gl_Position.y *= -1.0;
+#endif
+  gl_Position.x += uOffset.x;
+  gl_Position.y += uOffset.y;
+
+  vCoord = aCoord;
+}
+    </script>
+    <script id='fs' type='none'>
+precision mediump float;
+
+uniform sampler2D uTex;
+varying vec2 vCoord; // [0...1]
+
+void main(void) {
+  gl_FragColor = texture2D(uTex, vCoord);
+  //gl_FragColor = vec4(vCoord, 0, 1);//texture2D(uTex, vCoord);
+}
+    </script>
+    <canvas id='webgl' width=256 height=256></canvas>
+    <script type='text/javascript'>
+
+function GetGLSLByElemId(elemId) {
+  var elem = document.getElementById(elemId);
+  if (!elem)
+    throw 'Bad `elemId`: ' + elemId;
+
+  return elem.innerHTML.trim() + '\n';
+}
+
+function ProgramByElemIds(gl, vsId, fsId) {
+  var vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, GetGLSLByElemId(vsId));
+  gl.compileShader(vs);
+
+  var fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, GetGLSLByElemId(fsId));
+  gl.compileShader(fs);
+
+  var prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.deleteShader(vs);
+  gl.deleteShader(fs);
+
+  gl.linkProgram(prog);
+
+  var success = gl.getProgramParameter(prog, gl.LINK_STATUS);
+  if (success)
+      return prog;
+
+  console.log('Error linking program for \'' + vsId + '\' and \'' + fsId + '\'.');
+  console.log('\nLink log: ' + gl.getProgramInfoLog(prog));
+  console.log('\nVert shader log: ' + gl.getShaderInfoLog(vs));
+  console.log('\nFrag shader log: ' + gl.getShaderInfoLog(fs));
+  console.log('\nvs source: \n' + gl.getShaderSource(vs));
+  return null;
+}
+
+function ASSERT(cond, text) {
+  if (!cond) {
+    text = 'Assertion hit: ' + text;
+    console.log(text);
+    alert(text);
+    throw GiveMeStackTracePlease;
+  }
+}
+
+// Give ourselves a scope to return early from:
+const canvas = document.getElementById('webgl');
+const gl = canvas.getContext('experimental-webgl');
+ASSERT(gl);
+
+const prog = ProgramByElemIds(gl, 'vs', 'fs');
+ASSERT(prog, 'Basic program links.');
+
+prog.aCoord = gl.getAttribLocation(prog, 'aCoord');
+prog.uOffset = gl.getUniformLocation(prog, 'uOffset');
+prog.uTex = gl.getUniformLocation(prog, 'uTex');
+
+error = gl.getError();
+ASSERT(error == 0, 'Should be no errors: ' + error.toString(16));
+
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+
+const vertData = [
+  0, 0,
+  1, 0,
+  0, 1,
+  1, 1,
+];
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertData), gl.STATIC_DRAW);
+gl.vertexAttribPointer(prog.aCoord, 2, gl.FLOAT, false, 0, 0);
+gl.enableVertexAttribArray(prog.aCoord);
+
+gl.useProgram(prog);
+gl.uniform1i(prog.uTex, 0);
+
+const video = document.createElement('video');
+video.src = 'InL7Il5.mp4';
+video.loop = true;
+video.play();
+
+video.addEventListener('playing', tick, true);
+
+const tex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+function tick() {
+  video.removeEventListener('playing', tick, true);
+
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+
+  var a = 3 * performance.now() / 1000;
+
+  var x = 0.3 * Math.cos(a);
+  var y = 0.3 * Math.sin(a);
+  gl.uniform2f(prog.uOffset, x, y);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  error = gl.getError();
+  ASSERT(error == 0, 'Should be no errors3: ' + error.toString(16));
+
+  requestAnimationFrame(tick);
+}
+
+    </script>
+  </body>
+</html>
