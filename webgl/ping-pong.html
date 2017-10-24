@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <meta charset='utf-8'>
+   </head>
+   <body>
+      <canvas id='canvas' width=256 height=256></canvas>
+      <script type='text/javascript'>
+
+function linkProgramSources(gl, vertSource, fragSource) {
+   const prog = gl.createProgram();
+
+   function attachShaderSource(type, glsl) {
+      glsl = glsl.trim() + '\n';
+
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, glsl);
+      gl.compileShader(shader);
+      gl.attachShader(prog, shader);
+      return shader;
+   }
+   const vs = attachShaderSource(gl.VERTEX_SHADER, vertSource);
+   const fs = attachShaderSource(gl.FRAGMENT_SHADER, fragSource);
+
+   gl.linkProgram(prog);
+
+   const success = gl.getProgramParameter(prog, gl.LINK_STATUS);
+   if (!success) {
+      console.log('Error linking program: ' + gl.getProgramInfoLog(prog));
+      console.log('\nVert shader log: ' + gl.getShaderInfoLog(vs));
+      console.log('\nFrag shader log: ' + gl.getShaderInfoLog(fs));
+      return null;
+   }
+   gl.deleteShader(vs);
+   gl.deleteShader(fs);
+
+   let count = gl.getProgramParameter(prog, gl.ACTIVE_ATTRIBUTES);
+   for (let i = 0; i < count; i++) {
+      const info = gl.getActiveAttrib(prog, i);
+      prog[info.name] = gl.getAttribLocation(prog, info.name);
+   }
+   count = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
+   for (let i = 0; i < count; i++) {
+      const info = gl.getActiveUniform(prog, i);
+      prog[info.name] = gl.getUniformLocation(prog, info.name);
+   }
+   return prog;
+}
+
+const kBlitVS = [
+   'attribute vec2 aVertCoord; // [0...1]',
+   'varying vec2 vTexCoord; // [0...1]',
+   'void main() {',
+   '   gl_Position = vec4(aVertCoord*2.0 - 1.0, 0, 1); // [-1...1]',
+   '   vTexCoord = aVertCoord;',
+   '}',
+].join('\n');
+const kBlitFS = [
+   'precision mediump float;',
+   'uniform sampler2D uTex;',
+   'varying vec2 vTexCoord;',
+   'void main() {',
+   '   gl_FragColor = texture2D(uTex, vTexCoord);',
+   '}',
+].join('\n');
+
+
+function ASSERT(cond, text) {
+   if (!cond) {
+      text = 'Assertion hit: ' + text;
+      console.log(text);
+      alert(text);
+      throw GiveMeStackTracePlease;
+   }
+}
+
+const gl = canvas.getContext('experimental-webgl');
+const prog = linkProgramSources(gl, kBlitVS, kBlitFS);
+gl.useProgram(prog);
+gl.uniform1i(prog.uTex, 0);
+
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+
+const vertData = [
+   0, 0,
+   1, 0,
+   0, 1,
+   1, 1,
+];
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertData), gl.STATIC_DRAW);
+gl.vertexAttribPointer(prog.aVertCoord, 2, gl.FLOAT, false, 0, 0);
+gl.enableVertexAttribArray(prog.aVertCoord);
+
+function makeTexFB(width, height) {
+   const tex = gl.createTexture();
+   gl.bindTexture(gl.TEXTURE_2D, tex);
+   gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+   gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+   gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+   gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.drawingBufferWidth, gl.drawingBufferHeight, 0,
+                 gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+   const fb = gl.createFramebuffer();
+   gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+   fb.tex = tex;
+
+   return fb;
+}
+
+function drawInitial() {
+   gl.clearColor(0, 0, 0, 1);
+   gl.clear(gl.COLOR_BUFFER_BIT);
+
+   gl.enable(gl.SCISSOR_TEST);
+
+   gl.scissor(10, 10, gl.drawingBufferWidth - 20, gl.drawingBufferHeight - 20);
+   gl.clearColor(0.3, 0.3, 0.3, 1);
+   gl.clear(gl.COLOR_BUFFER_BIT);
+
+   gl.scissor(10, 10, gl.drawingBufferWidth/3, gl.drawingBufferHeight/3);
+   gl.clearColor(1, 0, 1, 1);
+   gl.clear(gl.COLOR_BUFFER_BIT);
+
+   gl.disable(gl.SCISSOR_TEST);
+}
+
+const fbA = makeTexFB(gl.drawingBufferWidth, gl.drawingBufferHeight);
+const fbB = makeTexFB(gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+function drawToScreen(fb) {
+   gl.bindTexture(gl.TEXTURE_2D, fb.tex);
+   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+function pingPong(n) {
+   let src = fbA;
+   let dest = fbB;
+
+   gl.bindFramebuffer(gl.FRAMEBUFFER, src);
+   drawInitial();
+
+   for (let i = 0; i < n; i++) {
+      gl.bindTexture(gl.TEXTURE_2D, src.tex);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dest);
+      const halfW = (gl.drawingBufferWidth / 2.0) | 0;
+      const halfH = (gl.drawingBufferHeight / 2.0) | 0;
+
+      gl.viewport(    0,     0, halfW, halfH);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      gl.viewport(halfW,     0, halfW, halfH);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      gl.viewport(    0, halfH, halfW, halfH);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      gl.viewport(halfW, halfH, halfW, halfH);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      const temp = src;
+      src = dest;
+      dest = temp;
+   }
+
+   drawToScreen(src);
+}
+
+pingPong(3);
+
+error = gl.getError();
+ASSERT(error == 0, 'Should be no errors: ' + error.toString(16));
+
+    </script>
+  </body>
+</html>
