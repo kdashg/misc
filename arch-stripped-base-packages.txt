@@ -1,0 +1,42 @@
+Removable:
+man-db
+groff
+texinfo
+s-nail
+reiserfsprogs
+xfsprogs
+man-pages
+gettext
+jfsutils
+mdadm
+libpipeline
+pcmciautils
+sed
+tar
+
+
+stuck:
+perl: openssl: coreutils
+sqlite: gnupg: gpgme: pacman
+cryptsetup: systemd
+gawk: mkinitcpio
+grep: mkinitcpio
+
+
+My minimal choices: (pacman -Qet(t))
+diffutils
+inetutils
+iputils
+licenses
+linux
+logrotate
+lvm2
+nano
+netctl
+pacman
+pciutils
+psmisc
+syslinux
+usbutils
+vim
+which
