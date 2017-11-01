@@ -65,8 +65,8 @@ def should_add_to_index(name):
     return ext in ('html', 'md', 'txt')
 
 for (cur, dirs, files) in os.walk('./'):
-    dirs[:] = filter(lambda x: x[0] != '.', dirs)
-    files = filter(lambda x: x[0] != '.', files)
+    dirs[:] = sorted(filter(lambda x: x[0] != '.', dirs))
+    files = sorted(filter(lambda x: x[0] != '.', files))
 
     htmls = filter(should_add_to_index, files)
     htmls = list(htmls)
