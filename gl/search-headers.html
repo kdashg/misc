@@ -5,7 +5,7 @@
    </head>
    <body>
       <style>
-#eStatus {
+#eFiles {
    color: #aaa;
 }
 .matched {
@@ -15,7 +15,8 @@ body {
    font-family: sans-serif;
 }
       </style>
-      <div id='eStatus'></div>
+      <div id='eFiles'></div>
+      <input id='eUpload' type='file'>
       <hr>
       Regex: <input id='eReStr'> Flags: <input id='eReFlags' value='i'>
       <hr>
@@ -95,39 +96,71 @@ function* findInLines(lineList, re) {
 }
 
 const gLines = [];
-async function addHeader(path) {
+async function addHeaderUrl(url) {
    const div = document.createElement('div');
-   eStatus.appendChild(div);
+   eFiles.appendChild(div);
    const fnUpdate = x => {
-      div.innerHTML = path + ': ' + x;
+      div.innerHTML = url + ': ' + x;
    };
    fnUpdate('requesting...');
-   const res = await fetch(path).catch(() => null);
+   const res = await fetch(url).catch(() => null);
    if (!res || !res.ok) {
       fnUpdate('fetch failed');
       return;
    }
    fnUpdate('receiving...');
    const text = await res.text();
-
+   addHeaderText(fnUpdate, url, text);
+}
+async function addHeaderText(fnUpdate, name, text) {
    fnUpdate('processing...');
-   for (const x of headerScopedLines(path, text)) {
+   for (const x of headerScopedLines(name, text)) {
       gLines.push(x);
    };
    fnUpdate('done');
    search();
 }
-addHeader('egl/egl.h');
-addHeader('egl/eglext.h');
-addHeader('egl/eglplatform.h');
-addHeader('egl/khrplatform.h');
-addHeader('gl/glcorearb.h');
-addHeader('gl/glext.h');
-addHeader('gl/glxext.h');
-addHeader('gl/wglext.h');
-addHeader('gles/gl2ext.h');
-addHeader('gles/gl3platform.h');
-addHeader('gles/gl32.h');
+
+addHeaderUrl('egl/egl.h');
+addHeaderUrl('egl/eglext.h');
+addHeaderUrl('egl/eglplatform.h');
+addHeaderUrl('egl/khrplatform.h');
+addHeaderUrl('gl/glcorearb.h');
+addHeaderUrl('gl/glext.h');
+addHeaderUrl('gl/glxext.h');
+addHeaderUrl('gl/wglext.h');
+addHeaderUrl('gles/gl2ext.h');
+addHeaderUrl('gles/gl3platform.h');
+addHeaderUrl('gles/gl32.h');
+
+function readFile(file) {
+   const fr = new FileReader();
+   return new Promise((yes, no) => {
+      fr.onloadend = () => {
+         if (fr.error) {
+            no(fr.error);
+         } else {
+            yes(fr.result);
+         }
+      };
+      fr.readAsText(file);
+   });
+}
+
+async function addFile(file) {
+   const div = document.createElement('div');
+   eFiles.appendChild(div);
+   const fnUpdate = x => {
+      div.innerHTML = file.name + ': ' + x;
+   };
+   fnUpdate('reading...');
+   const text = await readFile(file).catch(() => null);
+   if (text === null) {
+      fnUpdate('read failed');
+      return;
+   }
+   addHeaderText(fnUpdate, file.name, text);
+}
 
 function search() {
    eMatches.innerHTML = '';
@@ -175,7 +208,11 @@ function search() {
 eReStr.addEventListener('input', e => search());
 eReFlags.addEventListener('input', e => search());
 
-
+eUpload.addEventListener('input', e => {
+   if (!eUpload.files.length)
+      return;
+   addFile(eUpload.files[0]);
+});
 
       </script>
    </body>
