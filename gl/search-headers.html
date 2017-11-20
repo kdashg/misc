@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <meta charset='utf-8'>
+   </head>
+   <body>
+      <style>
+#eStatus {
+   color: #aaa;
+}
+.matched {
+   background-color: #bbf;
+}
+body {
+   font-family: sans-serif;
+}
+      </style>
+      <div id='eStatus'></div>
+      <hr>
+      Regex: <input id='eReStr'> Flags: <input id='eReFlags' value='i'>
+      <hr>
+      <div id='eMatches'></div>
+      <script>
+
+const kPreprocRe = /^ ?#+ ?([^ ]+)(?: (.+))?$/;
+
+function* splitLines(src) {
+   let pos = 0;
+   while (pos < src.length) {
+      const newline = src.indexOf('\n', pos);
+      if (newline == -1) {
+         newline = src.length;
+      }
+      yield src.substring(pos, newline);
+      pos = newline + 1;
+   }
+}
+
+function* headerScopedLines(fileName, src) {
+   let lineNum = 0;
+   let scopeStack = [{cmd:'file', cond:'"'+fileName+'"', prev:null, important:true}];
+   for (const line of splitLines(src)) {
+      lineNum++;
+      let vline = line.trim(); // virtual line
+      if (!vline)
+         continue;
+
+      vline = vline.replace(/[ \t]+/, ' ');
+      const preproc = kPreprocRe.exec(vline);
+      let nextScopeStack = scopeStack;
+      if (preproc) {
+         const cmd = preproc[1];
+         if (cmd.startsWith('if')) {
+            const cond = preproc[2];
+            nextScopeStack = [{cmd:cmd, cond:cond, prev:null, important:false}].concat(scopeStack);
+
+         } else if (cmd.startsWith('el')) {
+            let cond = '';
+            if (cmd == 'elif') {
+               cond = preproc[2];
+            }
+            nextScopeStack = scopeStack.slice();
+            nextScopeStack[0] = Object.assign({}, scopeStack[0], {important:false});
+
+         } else if (cmd == 'endif') {
+            nextScopeStack = scopeStack.slice();
+            nextScopeStack.shift();
+
+         } else if (cmd == 'define') {
+            const [key, val] = preproc[2].split(' ');
+            if (scopeStack.length) {
+               const topScope = scopeStack[0];
+               if (topScope.cmd == 'ifndef' && topScope.cond == key) {
+                  topScope.important = true;
+               }
+            }
+         }
+      }
+      yield {fileName:fileName, lineNum:lineNum, line:line, scopeStack:scopeStack};
+      scopeStack = nextScopeStack;
+   }
+}
+
+function* findInLines(lineList, re) {
+   for (const x of lineList) {
+      const match = re.exec(x.line);
+      if (!match)
+         continue;
+
+      yield Object.assign({
+         start: match.index,
+         len: match[0].length,
+      }, x);
+   }
+}
+
+const gLines = [];
+async function addHeader(path) {
+   const div = document.createElement('div');
+   eStatus.appendChild(div);
+   const fnUpdate = x => {
+      div.innerHTML = path + ': ' + x;
+   };
+   fnUpdate('requesting...');
+   const res = await fetch(path).catch(() => null);
+   if (!res || !res.ok) {
+      fnUpdate('fetch failed');
+      return;
+   }
+   fnUpdate('receiving...');
+   const text = await res.text();
+
+   fnUpdate('processing...');
+   for (const x of headerScopedLines(path, text)) {
+      gLines.push(x);
+   };
+   fnUpdate('done');
+   search();
+}
+addHeader('egl/egl.h');
+addHeader('egl/eglext.h');
+addHeader('egl/eglplatform.h');
+addHeader('egl/khrplatform.h');
+addHeader('gl/glcorearb.h');
+addHeader('gl/glext.h');
+addHeader('gl/glxext.h');
+addHeader('gl/wglext.h');
+addHeader('gles/gl2ext.h');
+addHeader('gles/gl3platform.h');
+addHeader('gles/gl32.h');
+
+function search() {
+   eMatches.innerHTML = '';
+
+   if (eReStr.value.length < 3)
+      return;
+
+   let re;
+   try {
+      re = RegExp(eReStr.value, eReFlags.value);
+   } catch (e) {}
+
+   let lastScopeStack = null;
+   let lastImportantScopes = null;
+   for (const x of findInLines(gLines, re)) {
+      if (x.scopeStack != lastScopeStack) {
+         lastScopeStack = x.scopeStack;
+         let importantScopes = [];
+         for (const y of lastScopeStack) {
+            if (y.important) {
+               importantScopes.push(y.cond);
+            }
+         }
+         importantScopes.push('');
+         importantScopes.reverse();
+         importantScopes = importantScopes.join(' > ');
+         if (importantScopes != lastImportantScopes) {
+            lastImportantScopes = importantScopes;
+            eMatches.innerHTML += '<br>' + importantScopes;
+         }
+      }
+      const a = x.line.substr(0, x.start);
+      const b = x.line.substr(x.start, x.len);
+      const c = x.line.substr(x.start+x.len);
+      const line = [
+         '<pre>',
+         '[', x.fileName, ':', x.lineNum, ']  ',
+         a, '<span class="matched">', b, '</span>', c,
+         '</pre>',
+      ].join('');
+      eMatches.innerHTML += line;
+   }
+}
+
+eReStr.addEventListener('input', e => search());
+eReFlags.addEventListener('input', e => search());
+
+
+
+      </script>
+   </body>
+</html>
