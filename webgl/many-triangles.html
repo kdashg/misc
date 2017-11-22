@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+  </head>
+  <body>
+    <script id='eVertSrc' type='none'>
+attribute vec3 aVertPos;
+attribute vec3 aSpherePos;
+attribute vec4 aColor;
+attribute vec4 aInstancedColor;
+uniform vec4 uPerspective;
+uniform mat3 uLocal;
+uniform mat4 uMV;
+uniform mat4 uProj;
+varying vec4 vColor;
+
+void main(void) {
+  vec3 normal = normalize(aVertPos);
+
+  vec3 vert = uLocal * normal;
+  vert += aSpherePos;
+
+  gl_Position = uMV * vec4(vert, 1.0);
+
+  // Project in-place.
+  gl_Position.xy *= uPerspective.xy;
+  gl_Position.w = gl_Position.z;
+  gl_Position.z *= uPerspective.z;
+  gl_Position.z += uPerspective.w;
+
+  vColor = aColor + aInstancedColor;
+}
+    </script>
+    <script id='eFragSrc' type='none'>
+precision mediump float;
+uniform vec4 uColor;
+varying vec4 vColor;
+
+void main(void) {
+  vec4 color = uColor + vColor;
+  gl_FragColor = 0.5 - 0.5 * cos(color * 3.14159 / 2.0);
+}
+    </script>
+    <canvas id='canvas'></canvas>
+    <script>
+
+function makePerspective(radianFovHeight, wOverH, zNear, zFar) {
+  const y = 1.0 / Math.tan(radianFovHeight / 2);
+  const x = y / wOverH;
+  const zDiff = zFar - zNear;
+  const z = (zNear + zFar) / zDiff;
+  const w = -2 * zNear * zFar / zDiff;
+  return new Float32Array([x, y, z, w]);
+}
+
+function linkProgramByIds(gl, vertSrcElem, fragSrcElem) {
+  const prog = gl.createProgram();
+
+  function attachShaderById(type, srcElem) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, srcElem.innerHTML.trim() + '\n');
+    gl.compileShader(shader);
+    gl.attachShader(prog, shader);
+    prog[type] = shader;
+  }
+  attachShaderById(gl.VERTEX_SHADER, vertSrcElem);
+  attachShaderById(gl.FRAGMENT_SHADER, fragSrcElem);
+
+  gl.linkProgram(prog);
+  const success = gl.getProgramParameter(prog, gl.LINK_STATUS);
+  if (!success) {
+    console.error('Error linking program:');
+    console.error('\nLink log: ' + gl.getProgramInfoLog(prog));
+    console.error('\nVert shader log: ' + gl.getShaderInfoLog(prog[gl.VERTEX_SHADER]));
+    console.error('\nFrag shader log: ' + gl.getShaderInfoLog(prog[gl.FRAGMENT_SHADER]));
+    return null;
+  }
+  gl.deleteShader(prog[gl.VERTEX_SHADER]);
+  gl.deleteShader(prog[gl.FRAGMENT_SHADER]);
+
+  let count = gl.getProgramParameter(prog, gl.ACTIVE_ATTRIBUTES);
+  for (let i = 0; i < count; i++) {
+    const info = gl.getActiveAttrib(prog, i);
+    prog[info.name] = gl.getAttribLocation(prog, info.name);
+  }
+  count = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < count; i++) {
+    const info = gl.getActiveUniform(prog, i);
+    prog[info.name] = gl.getUniformLocation(prog, info.name);
+  }
+  return prog;
+}
+
+class XorShift32 {
+  constructor(seed) {
+    if (seed === undefined) {
+      seed = performance.now() * 1000;
+    }
+    if (seed === 0) {
+      throw 'seed may not be zero';
+    }
+    this.state = seed|0;
+  }
+
+  static rshiftu32(x, n) {
+    const mask = (1 << (32-n)) - 1;
+    return (x >> n) & mask;
+  }
+
+  static u32ToDouble(i) {
+    i |= 0;
+    if (i >= 0)
+      return +i;
+    return +(i & 0x7fffffff) + Math.pow(2,32);
+  }
+
+  get Max() {
+    return XorShift32.u32ToDouble(0xffffffff);
+  }
+
+  /* Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs" */
+  next() {
+    let x = this.state;
+    x ^= x << 13;
+    x ^= XorShift32.rshiftu32(x, 17);
+    x ^= x << 5;
+    this.state = x;
+    return XorShift32.u32ToDouble(x) / this.Max;
+  }
+
+  static test() {
+    let failures = 0;
+    const ASSERT = (x, n) => {
+      console.assert(x, n);
+      failures += !x;
+    };
+
+    ASSERT(XorShift32.rshiftu32(0x80000000, 1) == 0x40000000, 20);
+    ASSERT(XorShift32.rshiftu32(0x40000000, 1) == 0x20000000, 21);
+    ASSERT(XorShift32.u32ToDouble(0x40000000) == 0x40000000, 30);
+    ASSERT(XorShift32.u32ToDouble(0x80000000) == Math.pow(2,31), 31);
+
+    let a = new XorShift32(1);
+    let b = new XorShift32(1);
+    let prev = 0.0;
+    for (let i = 0; i < 1000; i++) {
+      let x = a.next();
+      let y = b.next();
+
+      if (x <= 0.0 || x > 1.0) {
+        ASSERT(false, 1);
+        break;
+      }
+
+      if (x == prev) {
+        ASSERT(false, 2);
+        break;
+      }
+      prev = x;
+
+      if (x != y) {
+        ASSERT(false, 3);
+        break;
+      }
+    }
+
+    a = new XorShift32();
+    b = new XorShift32();
+    ASSERT(a.next() != b.next(), 10);
+
+    console.log('test failures: ' + failures);
+  }
+}
+
+XorShift32.test();
+
+const gl = canvas.getContext('experimental-webgl');
+gl.enable(gl.DEPTH_TEST);
+
+const prog = linkProgramByIds(gl, eVertSrc, eFragSrc);
+gl.useProgram(prog);
+
+let error = gl.getError();
+ASSERT(error == 0, 'Should be no errors.');
+
+throw todo;
+    </script>
+  </body>
+</html>
