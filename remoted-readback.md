@@ -56,13 +56,14 @@ func GLServer.PollSync(x, block):
 ## GLClient
 
 ~~~
-func GLClient.GetBufferSubData(x):
+func GLClient.GetBufferSubData(x, dest, len):
     switch x.usage:
         case DYNAMIC_READ:
         case STATIC_READ:
         case STREAM_READ:
-            if x.hasShmem:
-                return x.GetShmem()
+            if x.hasShmemAlready:
+                memcpy(dest, x.GetShmem(), len)
+                return
             Warning("Asking for readback without waiting to the command to complete is bad.")
             break
 
@@ -70,5 +71,7 @@ func GLClient.GetBufferSubData(x):
             Warning("Asking for readback from a non-_READ-usage buffer is bad.")
             break
 
-    return server.SyncGetBufferSubData(x)
+    x.SynchronousReadbackIntoShmem()
+    memcpy(dest, x.GetShmem(), len)
+    return
 ~~~
