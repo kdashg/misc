@@ -15,40 +15,19 @@ function bisect(x, arr, fnLess=fnLess) {
     return fnLess(x, arr[left]) ? left : left+1;
 }
 
-class LineTracker {
-    constructor(charItr) {
-        this._itr = charItr;
-        this._curPos = 0;
-        this._lineStartPositions = [0];
-    }
-
-    next() {
-        const res = this._itr.next();
-        this._curPos += 1;
-
-        if (!res.done && res.value == '\n') {
-            this._lineStartPositions.push(this._curPos);
-        }
-        return res;
-    }
-
-    get lineStartPositions() { return this._lineStartPositions; }
-
-    lineNumForPos(pos) {
-        const lineId = bisect(x, this._lineStartPositions);
-        const lineNum = lineId + 1;
-        return lineNum;
-    }
-}
-
 class LineMap {
     constructor() {
         this._lineStartPositions = [];
         this.addNextLineStart(0);
     }
 
-    get lineStartList() {
-        return this._lineStartPositions;
+    get lineCount() {
+        return this._lineStartPositions.length;
+    }
+
+    startPosForLine(lineNum) {
+        const lineId = lineNum - 1;
+        return this._lineStartPositions[lineId];
     }
 
     addNextLineStart(pos) {
@@ -62,45 +41,139 @@ class LineMap {
     }
 }
 
-function tokenizeSpirv(text, offset, lineMap) {
+// --
 
-}
+/*
 
 class Tokenizer {
-    constructor(text) {
-        this._text = text;
-        this._curPos = 0;
+    constructor()
+
+function codePointLength(str) {
+    let codePoints = 0;
+    for (let c of str) {
+        codePoints += 1;
+    }
+    return codePoints;
+}
+
+function substringUntil(str, offset, endStr) {
+    let endPos = str.indexOf(endStr, offset);
+    if (endPos == -1) {
+        endPos = str.length;
+    }
+    return str.substring(offset, endPos);
+}
+
+function substringIncluding(str, offset, endStr) {
+    const endPos = str.indexOf(endStr, offset);
+    if (endPos == -1)
+        throw null;
+    return str.substring(offset, endPos + endStr.length);
+}
+
+function repeatChar(c, n) {
+    let ret = '';
+    for (let i = 0; i < n; i++) {
+        ret += c;
+    }
+    return ret;
+}
+
+class ExProblemAt {
+    constructor(src, lineMap, offset) {
+        this.lineNum = lineMap.lineNumForPos(offset);
+        const lineStart = lineMap.startPosForLine(this.lineNum);
+        this.linePos = codePointLength(text.substring(lineStart, offset));
+
+        this.problemLine = substringUntil(text, lineStart, '\n');
+        this.problemPointerLine = repeatChar('-', this.linePos) + '^';
+    }
+}
+
+
+
+class ExUnmatchedTokenStart extends ExProblemAt {
+    constructor(src, lineMap, offset, startStr, endStr) {
+        super(src, lineMap, offset);
+
+        const lineNumStr = '[L' + this.lineNum + ']';
+        this.message = [
+            '[L${this.lineNum}:${this.linePos}] "${startStr}" has no matching "${endStr}".',
+            lineNumStr + this.problemLine,
+            repeatChar(' ', lineNumStr.length) + this.problemPointerLine,
+        ].join('\n');
+    }
+
+    toString() {
+        return this.message;
+    }
+}
+*/
+
+class ExBadToken {
+    constructor(src, startPos, endPos=-1) {
+        if (endPos == -1) {
+            endPos = src.length;
+        }
+        this.badToken = src.substring(startPos, endPos);
+    }
+
+    toString() {
+        return 'ExBadToken: "${this.badToken}"';
+    }
+}
+
+class TokenizePass {
+    constructor(src) {
+        this._src = src;
         this._lineMap = new LineMap();
     }
 
+    get src() { return this._src; }
+    get lineMap() { return this._lineMap; }
 
+    badToken(startPos, endPos=-1) {
+        return new ExBadToken(this._src, startPos, endPos);
+    }
 
-
-
-
-function* tokenize(text) {
-    let
-
-function* tokenize(src, spanList) {
-    const iter = src[Symbol.iterator]();
-    const tokens = [];
-
-    while (true) {
-        const c = iter.next();
-        if (c.done)
-            break;
-        line = line.trim();
-        if (!line)
-            break;
-
-        if (line[0] == ';') {
-            tokens.push(line);
-            break;
+    findMatchingQuote(startPos) {
+        const quoteChar = this._src[startPos];
+        for (let i = startPos+1; i < this._src.length; i++) {
+            const cur = this._src[i];
+            if (cur == '\\') {
+                i++;
+                continue;
+            }
+            if (cur == quoteChar)
+                return i;
         }
+        return -1;
+    }
 
-        if (line[0] == '"') {
+    substringUntil(startPos, endStr) {
+        let endPos = this._src.indexOf(endStr, startPos);
+        if (endPos == -1) {
+            endPos = this._src.length;
+        }
+        return this._src.substring(startPos, endPos);
+    }
 
-
-
-
-
+    tokenizeWith(fnNextToken) {
+        let curPos = 0;
+        const tokens = [];
+        while (curPos < this._src.length) {
+            const [consumed, emitted] = fnNextToken(this, curPos);
+            if (emitted) {
+                tokens.push(emitted);
+            }
+            for (let i in consumed) {
+                curPos += 1;
+                const c = consumed[i];
+                if (c == '\n') {
+                    this._lineMap.addNextLineStart(curPos);
+                }
+            }
+        }
+        return tokens;
+    }
+}
