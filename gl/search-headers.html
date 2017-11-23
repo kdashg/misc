@@ -165,7 +165,7 @@ async function addFile(file) {
 function search() {
    eMatches.innerHTML = '';
 
-   if (eReStr.value.length < 3)
+   if (eReStr.value.length < 2)
       return;
 
    let re;
@@ -175,6 +175,7 @@ function search() {
 
    let lastScopeStack = null;
    let lastImportantScopes = null;
+   const start = performance.now();
    for (const x of findInLines(gLines, re)) {
       if (x.scopeStack != lastScopeStack) {
          lastScopeStack = x.scopeStack;
@@ -189,7 +190,8 @@ function search() {
          importantScopes = importantScopes.join(' > ');
          if (importantScopes != lastImportantScopes) {
             lastImportantScopes = importantScopes;
-            eMatches.innerHTML += '<br>' + importantScopes;
+            const elem = eMatches.appendChild(document.createElement('div'))
+            elem.innerHTML = '<br>' + importantScopes;
          }
       }
       const a = x.line.substr(0, x.start);
@@ -201,8 +203,11 @@ function search() {
          a, '<span class="matched">', b, '</span>', c,
          '</pre>',
       ].join('');
-      eMatches.innerHTML += line;
+
+      const elem = eMatches.appendChild(document.createElement('div'));
+      elem.innerHTML = line;
    }
+   console.log('search time:', performance.now() - start);
 }
 
 eReStr.addEventListener('input', e => search());
