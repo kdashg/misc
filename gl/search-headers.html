@@ -162,6 +162,10 @@ async function addFile(file) {
    addHeaderText(fnUpdate, file.name, text);
 }
 
+function addDiv(elem) {
+   return elem.appendChild(document.createElement('div'));
+}
+
 function search() {
    eMatches.innerHTML = '';
 
@@ -190,8 +194,7 @@ function search() {
          importantScopes = importantScopes.join(' > ');
          if (importantScopes != lastImportantScopes) {
             lastImportantScopes = importantScopes;
-            const elem = eMatches.appendChild(document.createElement('div'))
-            elem.innerHTML = '<br>' + importantScopes;
+            addDiv(eMatches).innerHTML = '<br>' + importantScopes;
          }
       }
       const a = x.line.substr(0, x.start);
@@ -204,8 +207,7 @@ function search() {
          '</pre>',
       ].join('');
 
-      const elem = eMatches.appendChild(document.createElement('div'));
-      elem.innerHTML = line;
+      addDiv(eMatches).innerHTML = line;
    }
    console.log('search time:', performance.now() - start);
 }
