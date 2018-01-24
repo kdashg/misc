@@ -74,3 +74,6 @@ public:
 All references to GPU-side and CPU-side can be replaced by the more generic remote/non-mappable and local/mappable.
 This approach is not non-UMA or discrete-GPU specific.
 A multithreaded driver/implementation (especially a cross-process one) would benefit from this even on a UMA device.
+
+In WebGL, we can warn when an app messes this up and incurs a pipeline stall.
+This warning was implemented in Firefox in [bug 1425488](https://bugzilla.mozilla.org/show_bug.cgi?id=1425488).
