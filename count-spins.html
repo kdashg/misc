@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset='utf-8'>
+    </head>
+    <body>
+        <script>
+
+// BEGIN implementation of setZeroTimeout
+
+// Only add setZeroTimeout to the window object, and hide everything
+// else in a closure.
+(function() {
+    var timeouts = [];
+    var messageName = "zero-timeout-message";
+
+    // Like setTimeout, but only takes a function argument.  There's
+    // no time argument (always zero) and no arguments (you have to
+    // use a closure).
+    function setZeroTimeout(fn) {
+        timeouts.push(fn);
+        window.postMessage(messageName, "*");
+    }
+
+    function handleMessage(event) {
+        if (event.source == window && event.data == messageName) {
+            event.stopPropagation();
+            if (timeouts.length > 0) {
+                var fn = timeouts.shift();
+                fn();
+            }
+        }
+    }
+
+    window.addEventListener("message", handleMessage, true);
+
+    // Add the one thing we want added to the window object.
+    window.setZeroTimeout = setZeroTimeout;
+})();
+
+// END implementation of setZeroTimeout
+
+const COUNT = 10000;
+
+function appendBody(x) {
+    const e = document.createElement('div');
+    e.innerHTML = x;
+    document.body.appendChild(e);
+}
+
+const start = performance.now();
+function boom() {
+    const diff = performance.now() - start;
+    appendBody(COUNT + ' spins in ' + (diff) + 'ms');
+    appendBody('' + (diff / COUNT * 1000) + 'us per spin');
+}
+
+let i = COUNT;
+function tick() {
+    i -= 1;
+    if (i === 0) {
+        boom();
+        return;
+    }
+    setZeroTimeout(tick);
+}
+setZeroTimeout(tick);
+
+        </script>
+    </body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset='utf-8'>
+    </head>
+    <body>
+        <script>
+
+function appendBody(x) {
+    const e = document.createElement('div');
+    e.innerHTML = x;
+    document.body.appendChild(e);
+}
+
+function prettyTime(x) {
+    let suffix = 'ms';
+    if (x < 1) {
+        x *= 1000;
+        suffix = 'us';
+    }
+    if (x < 1) {
+        x *= 1000;
+        suffix = 'ns';
+    }
+    return x + suffix;
+}
+
+function report(x, y) {
+    appendBody('Workload of ' + x + ' in ' + prettyTime(y) + ': ' + prettyTime(y / x) + '/work');
+}
+
+let foo = 7;
+function count(n) {
+    const mult = 100;
+    const start = performance.now();
+    for (let i = 0; i < n*mult; i++) {
+        foo = (foo|0) + 1;
+    }
+    const diff = performance.now() - start;
+    if (diff) {
+        report(n, diff);
+    }
+    return diff;
+}
+
+function seek_magnitude_from_below(func, goalpost, start_at) {
+    let x = start_at || 1;
+    while (true) {
+        const y = func(x);
+        if (y > goalpost)
+            return [x, y];
+        x *= 2;
+    }
+}
+
+seek_magnitude_from_below(count, 300);
+
+        </script>
+    </body>
+</html>
