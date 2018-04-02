@@ -18,7 +18,7 @@ Date:   Fri Mar 30 01:06:18 2018 +0300
 
 All build times are for `./mach build` after running `./mach configure` untimed beforehand.
 
-The machine is a 2xE5-2670, so 2*2*8=32 hardware threads at 2.60GHz base.
+The machine is a 2xE5-2670, so 2x2x8=32 hardware threads at 2.60GHz base.
 I'm running everything with the default of -j32.
 GCC version: 7.3.1
 LLVM version: 6.0.0 (system and built)
