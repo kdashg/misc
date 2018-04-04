@@ -21,7 +21,10 @@ All build times are for `./mach build` after running `./mach configure` untimed 
 The machine is a 2xE5-2670, so 2x2x8=32 hardware threads at 2.60GHz base.
 I'm running everything with the default of -j32.
 GCC version: 7.3.1
-LLVM version: 6.0.0 (system and built)
+LLVM version: 6.0.0
+
+I only run one trial of each config, but the error bars on builds seem to be less than
++/-5s, so I'm not too concerned.
 
 ## Install GCC
 
@@ -81,7 +84,7 @@ ac_add_options --disable-tests
 `./mach build`: 18m09s (+6m50s from non-pgo)
 
 
-## Build with -fprofile-path
+## Build with -fprofile-use
 
 ~~~
 cd pgo-llvm
@@ -110,7 +113,7 @@ export CXX=/path/to/pgo-llvm/bin/clang++
 ac_add_options --disable-warnings-as-errors
 ~~~
 
-`./mach build`: 10m48s (-31s from baseline custom)
+`./mach build`: 10m30s (vs 12m24s for my system clang)
 Note that at these times, linking dominates the build time. (about 5m alone)
 It looks like lld defaults to using --threads, but we do spend most of the time pegging a
 single core.
@@ -120,16 +123,26 @@ time down.
 
 ## Establish baseline build times (optional)
 
-### System binary (optional)
-
-`./mach build`: 12m25s
-
-### Build a custom non-pgo'd 'riced' build for comparison (optional)
+To take a baseline, it's useful to see what we'd get without PGO or other options.
 
 ~~~
-flags='-march=native -O3'
 CFLAGS="$flags" CXXFLAGS="$flags" cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ../llvm
 cmake --build .
 ~~~
 
-`./mach build`: 11m19s (-1m06s from system binary)
+- Arch Linux `clang` 6.0.0-1: 12m24s
+- `flags=''`: 12m00s (-24s from system binary)
+- `flags='-O3'`: 12m02s (+2s from no-flags)
+- `flags='-march=native'`: 12m05s (+5s from no-flags)
+- `flags='-O3 -march=native'`: 11m55s (-5s from no-flags)
+- With PGO: 10m30s (-1m30s from no-flags, -1m54s from system binary)
+
+My guess is that no-flags clang builds with good enough optimization flags that it's not
+worth supplying your own flags.
+The spread in times here for different flags are really close to the error bars.
+
+## Conclusion
+
+It's probably worth it if you clobber a lot, particularly on a low-core-count machine.
+
+If that's too much work, just building 'default clang' from source seems to help.
