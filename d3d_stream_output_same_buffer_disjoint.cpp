@@ -116,6 +116,18 @@ main(const int argc, const char* const argv[])
         ASSERT(out_buffer);
     }
 
+    ID3D11Buffer* out_buffer2 = nullptr;
+    {
+        const D3D11_BUFFER_DESC desc{
+            sizeof(in_data), D3D11_USAGE_DEFAULT,
+            D3D11_BIND_STREAM_OUTPUT,
+            0, 0,
+            0
+        };
+        hr = device->CreateBuffer(&desc, nullptr, &out_buffer2);
+        ASSERT(out_buffer2);
+    }
+
     ID3D11Buffer* read_buffer = nullptr;
     {
         const D3D11_BUFFER_DESC desc{
@@ -152,6 +164,7 @@ main(const int argc, const char* const argv[])
         context->IASetVertexBuffers(0, 1, &in_buffer, strides, offsets);
     }
     {
+        //ID3D11Buffer* const buffers[]{ out_buffer, out_buffer2 };
         ID3D11Buffer* const buffers[]{ out_buffer, out_buffer };
         const UINT offsets[]{ 0, 8 };
         context->SOSetTargets(DISJOINT_SO_RANGES, buffers, offsets);
