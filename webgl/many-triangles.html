@@ -9,24 +9,23 @@ attribute vec3 aVertPos;
 attribute vec3 aSpherePos;
 attribute vec4 aColor;
 attribute vec4 aInstancedColor;
-uniform vec4 uPerspective;
 uniform mat3 uLocal;
-uniform mat4 uMV;
-uniform mat4 uProj;
+uniform mat4 uView;
+uniform vec4 uPerspective;
 varying vec4 vColor;
+varying vec3 vNormal;
 
 void main(void) {
-  vec3 normal = normalize(aVertPos);
+  vNormal = normalize(aVertPos);
 
-  vec3 vert = uLocal * normal;
+  vec3 vert = uLocal * vNormal;
   vert += aSpherePos;
 
-  gl_Position = uMV * vec4(vert, 1.0);
+  gl_Position = uView * vec4(vert, 1.0);
 
   // Project in-place.
-  gl_Position.xy *= uPerspective.xy;
   gl_Position.w = gl_Position.z;
-  gl_Position.z *= uPerspective.z;
+  gl_Position.xyz *= uPerspective.xyz;
   gl_Position.z += uPerspective.w;
 
   vColor = aColor + aInstancedColor;
@@ -35,10 +34,22 @@ void main(void) {
     <script id='eFragSrc' type='none'>
 precision mediump float;
 uniform vec4 uColor;
+uniform vec3 uDirLight;
 varying vec4 vColor;
+varying vec3 vNormal;
 
 void main(void) {
+  vNormal = normalize(vNormal);
+  if (gl_FaceForward) {
+    vNormal *= -1.0;
+  }
+  float diffuseMult = -dot(uDirLight, vNormal);
+  diffuseMult = max(diffuseMult, 0.0);
+
   vec4 color = uColor + vColor;
+  color *= diffuseMult;
+  color += vec4(0.1); // ambient
+
   gl_FragColor = 0.5 - 0.5 * cos(color * 3.14159 / 2.0);
 }
     </script>
