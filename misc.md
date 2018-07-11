@@ -24,3 +24,11 @@ $ git config --unset branch.my_branch_name.base
 $ git config --unset branch.my_branch_name.base-upstream
 ~~~
 
+## Git on Windows
+
+You basically need Git Bash, even if you choose not to use that shell.
+With another shell, you'll need to use `GIT_SSH_COMMAND=/bin/ssh git` in order to get ssh-agent to work.
+
+You can hook python up to Git Bash, but it breaks everything (failing to TTY detect?) when starting the repl.
+It works fine if you start it as `python -i` though.
+
