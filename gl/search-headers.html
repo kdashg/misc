@@ -166,8 +166,35 @@ function addDiv(elem) {
    return elem.appendChild(document.createElement('div'));
 }
 
+
+const params = new URLSearchParams(location.hash.slice(1));
+const str = params.get('str');
+const flags = params.get('flags');
+if (str) {
+   eReStr.value = decodeURIComponent(str);
+}
+if (flags) {
+   eReFlags.value = decodeURIComponent(flags);
+}
+
+
 function search() {
    eMatches.innerHTML = '';
+
+
+   const params = new URLSearchParams(location.hash.slice(1));
+   if (eReStr.value != '') {
+      params.set('str', encodeURIComponent(eReStr.value));
+   } else {
+      params.delete('str');
+   }
+   if (eReFlags.value != 'i') {
+      params.set('flags', encodeURIComponent(eReFlags.value));
+   } else {
+      params.delete('flags');
+   }
+   location.hash = params.toString();
+
 
    if (eReStr.value.length < 3)
       return;
