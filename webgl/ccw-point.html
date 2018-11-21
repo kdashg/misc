@@ -4,7 +4,7 @@
     <meta charset='UTF-8'>
   </head>
   <body>
-    <script id='vs' type='x-shader/x-vertex'>
+    <script id='vs' type='none'>
 
 attribute vec3 aPosition;
 
@@ -14,7 +14,7 @@ void main(void) {
 }
 
     </script>
-    <script id='fs' type='x-shader/x-fragment'>
+    <script id='fs' type='none'>
 
 precision mediump float;
 
@@ -25,24 +25,15 @@ void main(void) {
 }
 
     </script>
-    <canvas id='webgl' width=256 height=256></canvas>
     <script type='text/javascript'>
 
-function GetGLSLByElemId(elemId) {
-  var elem = document.getElementById(elemId);
-  if (!elem)
-    throw 'Bad `elemId`: ' + elemId;
-
-  return elem.innerHTML.trim() + '\n';
-}
-
-function ProgramByElemIds(gl, vsId, fsId) {
+function ProgramByElemIds(gl, vsElem, fsElem) {
   var vs = gl.createShader(gl.VERTEX_SHADER);
-  gl.shaderSource(vs, GetGLSLByElemId(vsId));
+  gl.shaderSource(vs, vsElem.innerHTML.trim());
   gl.compileShader(vs);
 
   var fs = gl.createShader(gl.FRAGMENT_SHADER);
-  gl.shaderSource(fs, GetGLSLByElemId(fsId));
+  gl.shaderSource(fs, fsElem.innerHTML.trim());
   gl.compileShader(fs);
 
   var prog = gl.createProgram();
@@ -68,15 +59,40 @@ function ProgramByElemIds(gl, vsId, fsId) {
 function ASSERT(cond, text) {
   if (!cond) {
     text = 'Assertion hit: ' + text;
-    console.log(text);
-    alert(text);
-    throw GiveMeStackTracePlease;
+    throw new Error(text);
   }
 }
 
-// Give ourselves a scope to return early from:
-var canvas = document.getElementById('webgl');
-var attribs = {
+// -
+
+const canvas = document.createElement('canvas');
+document.body.appendChild(canvas);
+canvas.width = 300;
+canvas.height = 300;
+
+document.body.appendChild(document.createElement('br'));
+
+const log_div = document.createElement('div');
+document.body.appendChild(log_div);
+
+function Log(t) {
+  console.log(t);
+  log_div.innerText += t + '\n';
+}
+
+canvas.addEventListener('webglcontextlost', function(e) {
+  Log(`[${performance.now() / 1000.0}] webglcontextlost`);
+  e.preventDefault();
+}, false);
+
+canvas.addEventListener('webglcontextrestored', function() {
+  Log(`[${performance.now() / 1000.0}] webglcontextrestored`);
+  Init();
+}, false);
+
+// -
+
+const attribs = {
   alpha: true,
   premultipliedAlpha: false,
   antialias: true,
@@ -84,23 +100,29 @@ var attribs = {
   stencil: false,
   preserveDrawingBuffer: true,
 };
-var gl = canvas.getContext('webgl', attribs);
+const gl = canvas.getContext('webgl', attribs);
 ASSERT(gl);
 
-gl.enable(gl.DEPTH_TEST);
+// -
 
-const prog = ProgramByElemIds(gl, 'vs', 'fs');
-ASSERT(prog, 'Basic program links.');
+let prog;
 
-prog.aPosition = gl.getAttribLocation(prog, 'aPosition');
-prog.uColor = gl.getUniformLocation(prog, 'uColor');
+function Init() {
+  gl.enable(gl.DEPTH_TEST);
 
-gl.useProgram(prog);
+  prog = ProgramByElemIds(gl, vs, fs);
+  ASSERT(prog, 'Basic program links.');
 
-error = gl.getError();
-ASSERT(error == 0, 'Should be no errors: ' + error.toString(16));
+  prog.aPosition = gl.getAttribLocation(prog, 'aPosition');
+  prog.uColor = gl.getUniformLocation(prog, 'uColor');
 
-Frame();
+  gl.useProgram(prog);
+
+  error = gl.getError();
+  ASSERT(error == 0, 'Should be no errors: 0x' + error.toString(16));
+
+  Frame();
+}
 
 function Frame() {
   var a = 3 * performance.now() / 1000;
@@ -109,7 +131,9 @@ function Frame() {
   var y = 0.7 * Math.sin(a);
 
   var error = gl.getError();
-  ASSERT(error == 0, 'Should be no errors: ' + error.toString(16));
+  if (gl.isContextLost())
+    return;
+  ASSERT(error == 0, 'Should be no errors: 0x' + error.toString(16));
 
   gl.clearColor(0.3, 0.3, 0.3, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -126,11 +150,16 @@ function Frame() {
   gl.uniform4f(prog.uColor, 1.0, 0.0, 1.0, 1.0);
   gl.drawArrays(gl.POINTS, 0, 1);
 
+
   error = gl.getError();
-  ASSERT(error == 0, 'Should be no errors: ' + error.toString(16));
+  if (gl.isContextLost())
+    return;
+  ASSERT(error == 0, 'Should be no errors: 0x' + error.toString(16));
 
   requestAnimationFrame(Frame);
 }
+
+Init();
 
     </script>
   </body>
