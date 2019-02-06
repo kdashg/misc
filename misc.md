@@ -32,3 +32,27 @@ With another shell, you'll need to use `GIT_SSH_COMMAND=/bin/ssh git` in order t
 You can hook python up to Git Bash, but it breaks everything (failing to TTY detect?) when starting the repl.
 It works fine if you start it as `python -i` though.
 
+## `apitrace`
+
+### On MacOS
+
+#### `dyld` issues trying to trace with `master`
+
+In order to run on MacOS, I followed this comment:
+
+https://github.com/apitrace/apitrace/issues/594#issuecomment-439684770
+
+Specifically, use the `dyld-interpose` branch for tracing, but `master` for replaying.
+
+#### New MacOS "dark mode" makes every other row in `qapitrace` invisible
+
+`QT_QPA_PLATFORMTHEME=qt5ct qapitrace ...`
+
+### With Firefox and E10S/multiprocess
+
+`apitrace` (at least the `dyld` branch?) seems to follow forks well, but it doesn't flush background process trace files regularly. (it tries to flush only in response to events?)
+
+The mega-hack I used was to add `flush();` to the end of `LocalWriter::endLeave()`.
+
+Moving forward, I proposed a PR to add a FLUSH_EVERY_MS envvar:
+https://github.com/apitrace/apitrace/pull/604
