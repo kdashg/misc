@@ -56,3 +56,94 @@ The mega-hack I used was to add `flush();` to the end of `LocalWriter::endLeave(
 
 Moving forward, I proposed a PR to add a FLUSH_EVERY_MS envvar:
 https://github.com/apitrace/apitrace/pull/604
+
+## GLES2 on Android?
+
+I don't see a way to get ES2 if the device offers ES3.
+The only thing I can think of is to manually search for EGLConfigs where either RENDERABLE_TYPE or CONFORMANT is missing the EGL_OPENGL_ES3_BIT bit.
+However, I dumped the configs in Fennec, and they're all the same for those:
+
+```
+flags: 0x71
+flags & CreateContextFlags::PREFER_ES3: 0
+EGLConfig { id: 9, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 12, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 10, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 11, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 21, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 24, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 22, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 23, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 33, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 36, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 34, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 35, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+[...]
+flags: 0x78
+flags & CreateContextFlags::PREFER_ES3: 1
+EGLConfig { id: 9, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 12, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 10, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 11, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 21, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 24, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 22, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 23, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 33, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 36, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 34, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+EGLConfig { id: 35, renderableType: 0x45 }
+  caveat: 0x3038
+  conformant: 0x45
+```
+
+ES3 can't natively support WebGL1's EXT_shader_texture_lod or WEBGL_draw_buffers, at least with present-day ANGLE.
+(ANGLE doesn't presently offer translation of ESSL1 shaders to ESSL3)
+And indeed, Chrome on Android doesn't offer support for these extensions on this ES3 device.
+
