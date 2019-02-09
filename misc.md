@@ -1,3 +1,5 @@
+# Misc Notes
+
 ## Debugging gecko
 
 ### Auto attach to process
