@@ -149,3 +149,23 @@ ES3 can't natively support WebGL1's EXT_shader_texture_lod or WEBGL_draw_buffers
 (ANGLE doesn't presently offer translation of ESSL1 shaders to ESSL3)
 And indeed, Chrome on Android doesn't offer support for these extensions on this ES3 device.
 
+## WebGL
+
+### Is a given page using WebGL?
+
+Paste into web console:
+
+```
+function dumpCanvases() {
+  for (const c of document.getElementsByTagName('canvas')) {
+    const t = (() => {
+      for (const t of ['2d', 'webgl', 'webgl2']) {
+        if (c.getContext(t)) return t;
+      }
+      return 'unknown';
+    })();
+    console.log(`#${c.id}: ${c.width}x${c.height} ${t}`);
+  }
+};
+dumpCanvases();
+```
