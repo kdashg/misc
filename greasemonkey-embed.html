@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <meta charset='utf-8'>
+   </head>
+   <body style='width: 100vw; height: 100vh; margin: 0; display: flex;'>
+      <div style='flex: 50%; display: flex; flex-direction: column;'>
+         Header:
+         <br/>
+         <textarea id='header_box' rows='10'>
+// ==UserScript==
+// @name     Embedded script
+// @version  1
+// @grant    none
+// ==/UserScript==
+         </textarea>
+         <br/>
+         Source:
+         <br/>
+         <textarea id='src_box' style='flex: 100%;'>
+const ok = true;
+console.log(`Embed \`${ok}\`!`);
+         </textarea>
+      </div>
+      <input type='button' value='=>' onclick='Refresh();'/>
+      <textarea id='output_box' readonly style='flex: 50%;'>
+      </textarea>
+      <script>
+
+function Refresh() {
+   const header = header_box.value.trim();
+   const src = src_box.value.trim();
+
+   let embed_src = src.replace(/\\/g, '\\\\');
+   embed_src = embed_src.replace(/`/g, '\\`');
+   embed_src = embed_src.replace(/\$/g, '\\$');
+
+   const embed = `${header}
+
+(() => {
+   const s = document.createElement('script');
+
+   s.text = \`
+${embed_src}
+\`;
+
+   document.head.appendChild(s);
+})();
+`;
+
+   output_box.value = embed;
+}
+
+header_box.value = header_box.value.trim() + '\n';
+src_box.value = src_box.value.trim() + '\n';
+Refresh();
+      </script>
+   </body>
+</html>
