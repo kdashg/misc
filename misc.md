@@ -169,3 +169,10 @@ function dumpCanvases() {
 };
 dumpCanvases();
 ```
+
+
+## Greasemonkey
+
+This can be really useful for debugging sites in the wild, but it can be tricky to embed a debugging script with Greasemonkey. To make it easier, I wrote: https://jdashg.github.io/misc/greasemonkey-embed.html
+
+For instance, WebGL-RR (https://raw.githubusercontent.com/jdashg/webgl-rr/master/webgl-rr.js) can be copy-pasted into the "Source" field, and the output can be easily copy+pasted into Greasemonkey.
