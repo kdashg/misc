@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <style>
+      .torrent {
+        background-color: LightYellow;
+        white-space: pre;
+        font-family: monospace;
+      }
+      .torrent-failed {
+        background-color: LightCoral;
+      }
+      .torrent-done {
+        background-color: LightBlue;
+      }
+      .torrent-seeded {
+        background-color: LightGreen;
+      }
+    </style>
+    <script src='https://cdn.jsdelivr.net/webtorrent/latest/webtorrent.min.js'></script>
+  </head>
+  <body>
+    <h2>Basic UI for <a href='https://webtorrent.io'>https://webtorrent.io</a></h2>
+    <em>NB: In the browser, WebTorrent can only download torrents that are seeded by a WebRTC-capable torrent client.</em>
+    <hr/>Magnet URI, torrent URL, or info hash hex string:
+    <br/><textarea id='g_uri' style='width: 100%;'>https://webtorrent.io/torrents/sintel.torrent</textarea>
+    <br/><button type='button' onclick='add_from_link()'>Add</button>
+    <hr/>
+    <script>
+'use strict';
+
+// -
+
+function add_child(parent, type, className='') {
+  const ret = parent.appendChild(document.createElement(type));
+  ret.className = className;
+  return ret;
+}
+
+// -
+
+const BYTES_UNITS = ['B', 'kB', 'MB', 'GB', 'TB'];
+
+function humanize_bytes(val) {
+  if (val <= 0 || val === 1/0 || val != val) return val + BYTES_UNITS[0];
+  val = Math.ceil(val);
+
+  let commas = Math.floor(Math.log(val) / Math.log(1000));
+  commas = Math.min(commas, BYTES_UNITS.length-1);
+
+  const commas_base = Math.pow(1000, commas);
+  let approx = val / commas_base;
+  if (commas) approx = approx.toPrecision(3);
+  return approx + BYTES_UNITS[commas];
+}
+console.assert(humanize_bytes(-100) == '-100B');
+console.assert(humanize_bytes(1/0) == 'InfinityB');
+console.assert(humanize_bytes(0/0) == 'NaNB');
+console.assert(humanize_bytes(0) == '0B', humanize_bytes(0));
+console.assert(humanize_bytes(0.1) == '1B');
+console.assert(humanize_bytes(999) == '999B');
+console.assert(humanize_bytes(1000) == '1.00kB', humanize_bytes(1000));
+console.assert(humanize_bytes(1001) == '1.00kB');
+console.assert(humanize_bytes(1010) == '1.01kB');
+
+// -
+
+const DURATION_UNITS = ['s', 'm', 'h', 'd'];
+
+function humanize_duration(val) {
+  if (val <= 0 || val === 1/0 || val != val) return val + DURATION_UNITS[0];
+  val = Math.ceil(val);
+
+  let parts = [val];
+  (() => {
+    if (parts[0] < 60)
+      return;
+    parts.unshift(Math.floor(parts[0] / 60));
+    parts[1] %= 60;
+    if (parts[0] < 60)
+      return;
+    parts.unshift(Math.floor(parts[0] / 60));
+    parts[1] %= 60;
+    if (parts[0] < 24)
+      return;
+    parts.unshift(Math.floor(parts[0] / 24));
+    parts[1] %= 24;
+  })();
+  let ret = '';
+  for (const i in parts) {
+    const t = parts[parts.length - 1 - i];
+    //if (t < 10) ret += '0';
+    ret = t + DURATION_UNITS[i] + ret;
+  }
+  return ret;
+}
+console.assert(humanize_duration(-100) == '-100s');
+console.assert(humanize_duration(1/0) == 'Infinitys');
+console.assert(humanize_duration(0/0) == 'NaNs');
+console.assert(humanize_duration(0) == '0s');
+console.assert(humanize_duration(0.1) == '1s');
+console.assert(humanize_duration(59) == '59s');
+console.assert(humanize_duration(60) == '1m0s');
+console.assert(humanize_duration(61) == '1m1s');
+console.assert(humanize_duration(3599) == '59m59s');
+console.assert(humanize_duration(3600) == '1h0m0s');
+console.assert(humanize_duration(3601) == '1h0m1s');
+
+// -
+
+const TORRENT_FILE_HUMAP = {
+  name: x => x,
+  path: x => x,
+  length: humanize_bytes,
+  downloaded: humanize_bytes,
+  progress: x => (x * 100|0) + '%',
+};
+
+const TORRENT_HUMAP = {
+  infoHash: x => x.substr(0, 32) + '[...]',
+  magnetURI: x => x,
+  timeRemaining: humanize_duration,
+  files: x => x.map(y => humanize_object(y, TORRENT_FILE_HUMAP)),
+  received: humanize_bytes,
+  downloaded: humanize_bytes,
+  uploaded: humanize_bytes,
+  downloadSpeed: x => humanize_bytes(x) + '/s',
+  uploadSpeed: x => humanize_bytes(x) + '/s',
+  progress: x => (x * 100|0) + '%',
+  ratio: x => (x * 100|0) + '%',
+  numPeers: x => x,
+  path: x => x,
+};
+
+function humanize_object(obj, humap) { // HUMAnizer MAP
+  const ret = {};
+  for (const k in humap) {
+    if (!(k in obj))
+      continue;
+    const fn = humap[k];
+    ret[k] = fn(obj[k]);
+  }
+  return ret;
+}
+
+/*
+files:
+  : name: Sintel.de.srt
+    path: Sintel/Sintel.de.srt
+    length: 1.65kB
+    downloaded: 0B
+  : name: Sintel.en.srt
+    path: Sintel/Sintel.en.srt
+    length: 1.51kB
+    downloaded: 0B
+*/
+
+function humanize_stringify(val) {
+  const parts = [];
+  function recurse(x, line_prefix) {
+    if (!(x instanceof Object)) {
+      parts.push(x);
+      return;
+    }
+    const new_line_prefix = line_prefix + '  ';
+
+    parts.push('{');
+    let empty = true;
+    for (const k in x) {
+      empty = false;
+      parts.push(new_line_prefix);
+      parts.push(k);
+      parts.push(': ');
+      const v = x[k];
+      recurse(v, new_line_prefix);
+      parts.push(',');
+    }
+    if (!empty) {
+      parts.push(line_prefix);
+    }
+    parts.push('}');
+  }
+  recurse(val, '\n');
+  return parts.join('');
+}
+
+// -
+
+const WT = new WebTorrent();
+
+const REFRESHES = [];
+function refresh_loop() {
+  for (const x of REFRESHES) {
+    x();
+  }
+}
+setInterval(refresh_loop, 300);
+
+function add_from_link() {
+  const torrent_str = g_uri.value;
+  g_uri.value = '';
+
+  const torrent = WT.add(torrent_str);
+
+  const e_torrent = add_child(document.body, 'div', 'torrent');
+
+  const e_torrent_info = add_child(e_torrent, 'div');
+  const e_files = add_child(e_torrent, 'details');
+  const e_torrent_urls = add_child(e_torrent, 'ul');
+
+  const e_files_summary = add_child(e_files, 'summary');
+  const e_files_info = add_child(e_files, 'div');
+
+  e_files_summary.textContent = '(awaiting metadata)';
+
+  torrent.on('metadata', () => {
+    let total_bytes = 0;
+    for (const f of torrent.files) {
+      total_bytes += f.length;
+    }
+    e_files_summary.textContent = `${torrent.files.length} files, ${humanize_bytes(total_bytes)}`;
+
+    for (const f of torrent.files) {
+      const li = add_child(e_torrent_urls, 'li');
+      const a = add_child(li, 'a');
+      a.download = f.name;
+      a.textContent = `${f.path} (${humanize_bytes(f.length)})`;
+      f.getBlobURL((err, url) => {
+        if (err)
+          return;
+        a.href = url;
+      });
+    }
+  });
+
+  torrent.on('error', err => {
+    e_torrent.classList.add('torrent-failed');
+  });
+  torrent.on('done', () => {
+    e_torrent.classList.add('torrent-done');
+  });
+  torrent.on('warning', (err) => {
+    console.log('torrent.warning: ' + err);
+    const e = add_child(e_torrent, 'p');
+    e.textContent = 'Warning: ' + err;
+  });
+
+  function refresh() {
+    const info = humanize_object(torrent, TORRENT_HUMAP);
+    const files = info.files;
+    delete info.files;
+
+    e_torrent_info.textContent = humanize_stringify(info);
+    e_files_info.textContent = humanize_stringify(files);
+
+    if (torrent.progress == 1.0 &&
+        torrent.ratio >= 1.0)
+    {
+      e_torrent.classList.add('torrent-seeded');
+    }
+  };
+  refresh();
+  REFRESHES.push(refresh);
+
+  const e_destroy = add_child(e_torrent, 'button');
+  e_destroy.type = 'button';
+  e_destroy.textContent = 'Destroy';
+  e_destroy.addEventListener('click', () => {
+    torrent.destroy();
+    e_torrent.classList.add('torrent-failed');
+  });
+}
+    </script>
+  </body>
+</html>
