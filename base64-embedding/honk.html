@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset='UTF-8'>
+    <meta charset='utf-8'>
 </head>
 <body>
     <script>
@@ -15,20 +15,30 @@ audio.addEventListener('ended', function() {
     document.bgColor = 'ffffff';
 });
 
-document.addEventListener('mousedown', function() {
+// -
+
+function down(e) {
+    e.preventDefault(); // If touch, prevent mouse events.
+
     audio.pause();
     audio.currentTime = 0;
     audio.play();
 
     document.bgColor = '00ff00';
-});
+}
 
-document.addEventListener('mouseup', function() {
+function up(e) {
+    e.preventDefault(); // If touch, prevent mouse events.
+
     if (document.bgColor == '00ff00') {
         document.bgColor = '7fff7f';
     }
-});
+}
 
+document.addEventListener('mousedown', down);
+document.addEventListener('mouseup', up);
+document.addEventListener('touchstart', down);
+document.addEventListener('touchend', up);
     </script>
 </body>
 </html>
