@@ -118,4 +118,4 @@ body_text = '\n'.join(body.to_lines(2))
 text = index_template.substitute(body=body_text)
 
 with open('index.html', 'wb') as f:
-    f.write(text.encode('utf-8'))
+    f.write(text.encode())
