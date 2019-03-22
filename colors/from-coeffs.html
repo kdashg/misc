@@ -9,111 +9,116 @@
 <input type='button' value='Rec601' onclick='setRec601();'>
 <input type='button' value='Rec709' onclick='setRec709();'>
 <input type='button' value='Rec2020' onclick='setRec2020();'>
-<br>Kr: <input id='kr'>
-<br>Kg: <input id='kg'>
-<br>Kb: <input id='kb'>
-<br>Bits: <input id='bits'> (use 1 for floats)
+<br>Kr: <input id='e_kr'>
+<br>Kg: <input id='e_kg'>
+<br>Kb: <input id='e_kb'>
+<br>Bits: <input id='e_bits'> (use 1 for floats)
 <br>Range:
-<select id='range-type'>
-    <option value='narrow' selected>Narrow (y: 16-235, cbcr: 16-128-240)</option>
-    <option value='full'>Full (y: 0-255, cbcr: 0-255)</option>
-</select>
+<select id='e_range_type'>
+    <option value='narrow' selected>Narrow</option>
+    <option value='full'>Full</option>
+</select> <span id='e_range_info'></span>
 <br>Array order:
-<select id='array-major'>
+<select id='e_array_major'>
     <option value='row' selected>Row-major (common)</option>
     <option value='column'>Column-major (for OpenGL)</option>
 </select>
-<br>Precision: <input id='precision' value='5'>
+<br>Precision: <input id='e_precision' value='5'>
 <br><input type='button' value='recalc' onclick='recalc();'>
-<br><pre id='rgbToYcbcr'>-</pre>
-<br><pre id='ycbcrToRgb'>-</pre>
+<pre id='e_rgbToYcbcr'>-</pre>
+<pre id='e_ycbcrToRgb'>-</pre>
 <hr>
 
-RGB: <input type='button' value='From YCbCr' onclick='fromYcbcr();'>
-<input id='r' value='0'> <input id='g' value='255'> <input id='b' value='0'>
+RGB: <input id='e_r'> <input id='e_g'> <input id='e_b'>
 <br>
-YCbCr: <input type='button' value='From RGB' onclick='fromRgb();'>
-<input id='y'> <input id='cb'> <input id='cr'>
+YCbCr: <input id='e_y'> <input id='e_cb'> <input id='e_cr'>
 
 <script>
 'use strict';
 
-function floatFromInput(elemId) {
-    const elem = document.getElementById(elemId);
-    const val = elem.value;
-    const fval = parseFloat(val);
-    return fval;
-}
-
-function setElemText(elemId, text) {
-    const elem = document.getElementById(elemId);
-    elem.innerText = text;
-}
-
-function setInput(elemId, val) {
-    const elem = document.getElementById(elemId);
-    elem.value = val;
-}
-
 function setRec601() {
-    setInput('kr', '0.299');
-    setInput('kg', '0.587');
-    setInput('kb', '0.114');
-    setInput('bits', '8');
+    e_kr.value = 0.299;
+    e_kg.value = 0.587;
+    e_kb.value = 0.114;
+    e_bits.value = 8;
     recalc();
 }
 
 function setRec709() {
-    setInput('kr', '0.2126');
-    setInput('kg', '0.7152');
-    setInput('kb', '0.0722');
-    setInput('bits', '8');
+    e_kr.value = 0.2126;
+    e_kg.value = 0.7152;
+    e_kb.value = 0.0722;
+    e_bits.value = 8;
     recalc();
 }
 
 function setRec2020() {
-    setInput('kr', '0.2627');
-    setInput('kg', '0.6780');
-    setInput('kb', '0.0593');
-    setInput('bits', '10');
+    e_kr.value = 0.2627;
+    e_kg.value = '0.6780'; // String to preserve the trailing zero.
+    e_kb.value = 0.0593;
+    e_bits.value = 10;
     recalc();
 }
 
-const narrowRange = {
-    y0: 16,
-    y1: 235, // 16+219
-    cbcr0: 128,
-    cbcr1: 240, // 128+224/2
-};
-const fullRange = {
-    y0: 0,
-    y1: 255,
-    cbcr0: 127.5,
-    cbcr1: 255,
-};
-
-let normalizer;
 let rgbToYuv;
 let yuvToYcbcr;
 let rgbToYcbcr;
 let ycbcrToRgb;
 
-function recalc() {
-    const kr = floatFromInput('kr');
-    const kg = floatFromInput('kg');
-    const kb = floatFromInput('kb');
+const FULL_RANGE = {
+    y0: 0.0,
+    y1: 1.0,
+    cbcr0: 0.5,
+    cbcr1: 1.0,
+};
 
-    const rangeType = document.getElementById('range-type').value;
-    let range = narrowRange;
-    if (rangeType == 'full') {
-        range = fullRange;
+function getRangeInfo() {
+    if (e_range_type.value == 'full') {
+        return FULL_RANGE;
     }
-    const precision = floatFromInput('precision') | 0;
 
-    const y0 = range.y0 / 255;
-    const y1 = range.y1 / 255;
-    const cbcr0 = range.cbcr0 / 255;
-    const cbcr1 = range.cbcr1 / 255;
+    const range = {
+        y0: 16,
+        y1: 235, // 16+219
+        cbcr0: 128,
+        cbcr1: 240, // 128+224/2
+    };
+    const bits = parseInt(e_bits.value);
+    if (bits === 1) {
+        range.y0 /= 255;
+        range.y1 /= 255;
+        range.cbcr0 /= 255;
+        range.cbcr1 /= 255;
+        return range;
+    }
+    // Fortunately, 10- and 12-bit narrow are just scaled 8-bit narrow.
+    range.y0 <<= bits - 8;
+    range.y1 <<= bits - 8;
+    range.cbcr0 <<= bits - 8;
+    range.cbcr1 <<= bits - 8;
+
+    const normalizer = (1 << bits) - 1;
+    range.y0 /= normalizer;
+    range.y1 /= normalizer;
+    range.cbcr0 /= normalizer;
+    range.cbcr1 /= normalizer;
+    return range;
+}
+
+function recalc() {
+    refreshRangeInfo();
+
+    const kr = parseFloat(e_kr.value);
+    const kg = parseFloat(e_kg.value);
+    const kb = parseFloat(e_kb.value);
+
+    const precision = parseInt(e_precision.value);
+
+    const range = getRangeInfo();
+    const y0 = range.y0;
+    const y1 = range.y1;
+    const cbcr0 = range.cbcr0;
+    const cbcr1 = range.cbcr1;
 
     const uRange = 1-kb;
     const vRange = 1-kr;
@@ -126,51 +131,93 @@ function recalc() {
                    [0, 0, cbcr1-cbcr0, cbcr0],
                    [0, 0, 0, 1] ];
 
-    const arrayMajor = document.getElementById('array-major').value;
     let fnMatToString = matString;
-    if (arrayMajor === 'column') {
+    if (e_array_major.value === 'column') {
         fnMatToString = (x,y) => matString(matTrans(x), y);
     }
 
     rgbToYcbcr = matMul(yuvToYcbcr, rgbToYuv);
-    setElemText('rgbToYcbcr', 'rgbToYcbcr = \n' + fnMatToString(rgbToYcbcr, precision));
+    e_rgbToYcbcr.textContent = 'rgbToYcbcr = \n' + fnMatToString(rgbToYcbcr, precision);
 
     ycbcrToRgb = matInv(rgbToYcbcr);
-    setElemText('ycbcrToRgb', 'ycbcrToRgb = \n' + fnMatToString(ycbcrToRgb, precision));
+    e_ycbcrToRgb.textContent = 'ycbcrToRgb = \n' + fnMatToString(ycbcrToRgb, precision);
 
     //const back = matInv(ycbcrToRgb);
     //console.log('rgbToYcbcr-1-1', fnMatToString(back));
 }
 
-function convert(srcIds, srcToDest, destIds) {
-    const bits = floatFromInput('bits');
+function refreshRangeInfo() {
+    const bits = parseInt(e_bits.value);
     const normalizer = (1 << bits) - 1;
     const points = (normalizer == 1) ? 5 : 0;
 
-    let src = srcIds.map(x => floatFromInput(x) / normalizer);
+    function round(x) {
+        const pointsPow = Math.pow(10, points);
+        return Math.round(x * pointsPow) / pointsPow;
+    }
+    function toFixed(x) {
+        return x.toFixed(points);
+    }
+
+    const range = getRangeInfo();
+
+    const y0 = toFixed(round(range.y0 * normalizer));
+    const y1 = toFixed(round(range.y1 * normalizer));
+
+    let cbcrMid = round(range.cbcr0 * normalizer);
+    let cbcrMax = round(range.cbcr1 * normalizer);
+    const cbcrMin = toFixed(2*cbcrMid - cbcrMax); // min = mid - (max - mid)
+    cbcrMid = toFixed(cbcrMid);
+    cbcrMax = toFixed(cbcrMax);
+
+    e_range_info.textContent = `(Y: ${y0}-${y1} CbCr: ${cbcrMin}-${cbcrMid}-${cbcrMax})`;
+}
+[e_bits, e_range_type, e_array_major, e_precision].forEach(e => {
+    e.addEventListener('change', recalc);
+});
+
+// -
+
+function convert(srcElems, srcToDest, destElems) {
+    const bits = parseInt(e_bits.value);
+    const normalizer = (1 << bits) - 1;
+
+    let src = srcElems.map(e => parseFloat(e.value) / normalizer);
     src.push(1);
 
     const dest = matMulVec(srcToDest, src);
     for (let i = 0; i < 3; i++) {
-        const str = (dest[i]*normalizer).toFixed(points);
-        setInput(destIds[i], str);
+        let val = dest[i];
+        val = Math.max(0, Math.min(val, 1)); // clamp to [0,1]
+        destElems[i].value = (val*normalizer).toString();
     }
 }
 
+// -
+
+const RGB_ELEMS = [e_r, e_g, e_b];
+const YCBCR_ELEMS = [e_y, e_cb, e_cr];
+
 function fromRgb() {
-    convert(['r', 'g', 'b'],
-            rgbToYcbcr,
-            ['y', 'cb', 'cr']);
+    convert(RGB_ELEMS, rgbToYcbcr, YCBCR_ELEMS);
 }
 
 function fromYcbcr() {
-    convert(['y', 'cb', 'cr'],
-            ycbcrToRgb,
-            ['r', 'g', 'b']);
+    convert(YCBCR_ELEMS, ycbcrToRgb, RGB_ELEMS);
 }
 
+RGB_ELEMS.forEach(e => e.addEventListener('change', fromRgb));
+YCBCR_ELEMS.forEach(e => e.addEventListener('change', fromYcbcr));
+
+// -
+
 setRec601();
+
+e_r.value = 0;
+e_g.value = 255;
+e_b.value = 0;
 fromRgb();
+fromYcbcr();
 
 </script>
 
