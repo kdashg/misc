@@ -1,6 +1,7 @@
 
 function vecDot(a, b) {
     var ret = 0;
+    if (a.length !== b.length) throw new Error(`${a.length} !== ${b.length}`);
     for (var i = 0; i < a.length; i++) {
         ret += a[i]*b[i];
     }
@@ -13,18 +14,17 @@ function matRow(m, row) {
 
 function matCol(m, col) {
     let ret = [];
-    for (var i = 0; i < m[0].length; i++) {
+    for (var i = 0; i < m.length; i++) {
         ret.push(m[i][col]);
     }
     return ret;
 }
 
 function matMul(a, b) {
-    const n = a[0].length;
     const ret = [];
-    for (let y = 0; y < n; y++) {
+    for (let y = 0; y < a.length; y++) {
         const row = [];
-        for (let x = 0; x < n; x++) {
+        for (let x = 0; x < b[0].length; x++) {
             const val = vecDot(matRow(a, y), matCol(b, x));
             row.push(val);
         }
@@ -34,20 +34,18 @@ function matMul(a, b) {
 }
 
 function matMulVec(a, b) {
-    const n = a[0].length;
-    const ret = [];
-    for (let y = 0; y < n; y++) {
-        ret.push(vecDot(a[y], b));
-    }
-    return ret;
+    b = [b];
+    b = matTrans(b);
+    return matMul(a, b);
 }
 
 function matAdd(a, b) {
-    const n = a[0].length;
+    if (a.length !== b.length) throw new Error(`${a.length} !== ${b.length}`);
     const ret = [];
-    for (let y = 0; y < n; y++) {
+    for (let y = 0; y < a.length; y++) {
+        if (a[y].length !== b[y].length) throw new Error(`${a[y].length} !== ${b[y].length}`);
         const row = [];
-        for (let x = 0; x < n; x++) {
+        for (let x = 0; x < a[y].length; x++) {
             const val = a[y][x] + b[y][x];
             row.push(val);
         }
@@ -57,11 +55,10 @@ function matAdd(a, b) {
 }
 
 function matNeg(a) {
-    const n = a[0].length;
     const ret = [];
-    for (let y = 0; y < n; y++) {
+    for (let y = 0; y < a.length; y++) {
         const row = [];
-        for (let x = 0; x < n; x++) {
+        for (let x = 0; x < a[y].length; x++) {
             const val = -a[y][x];
             row.push(val);
         }
@@ -71,12 +68,14 @@ function matNeg(a) {
 }
 
 function matDet(m) {
-    const n = m[0].length;
-    if (n == 1)
+    if (m.length === 1) {
+        if (m[0].length !== m.length) throw new Error(`${m[0].length} !== ${m.length}`);
         return m[0][0];
+    }
 
     let ret = 0;
-    for (let x = 0; x < n; x++) {
+    for (let x = 0; x < m.length; x++) {
+        if (m[x].length !== m.length) throw new Error(`${m[x].length} !== ${m.length}`);
         const cofact = matCofactor(m, x, 0);
         ret += m[0][x]*cofact;
     }
@@ -86,8 +85,8 @@ function matDet(m) {
 function matString(m, precision) {
     precision = precision || 5;
     const rows = [];
-    const n = m[0].length;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < m.length; i++) {
+        if (m[i].length !== m[0].length) throw new Error(`${m[i].length} !== ${m[0].length}`);
         const row = matRow(m, i);
         const format = function(x) {
             let str = x.toFixed(precision);
@@ -113,6 +112,7 @@ function matTrans(m) {
 }
 
 function matMinorMat(m, X, Y) {
+    if (m[0].length !== m.length) throw new Error(`${m[0].length} !== ${m.length}`);
     const n = m[0].length;
     const ret = [];
     for (let y = 0; y < n; y++) {
@@ -132,6 +132,7 @@ function matMinorMat(m, X, Y) {
 }
 
 function matCofactor(m, X, Y) {
+    if (m[0].length !== m.length) throw new Error(`${m[0].length} !== ${m.length}`);
     const minorMat = matMinorMat(m, X, Y);
     const minor = matDet(minorMat);
     let cofactor = minor;
@@ -142,11 +143,10 @@ function matCofactor(m, X, Y) {
 }
 
 function matScale(m, k) {
-    const n = m[0].length;
     const ret = [];
-    for (let y = 0; y < n; y++) {
+    for (let y = 0; y < m.length; y++) {
         const row = [];
-        for (let x = 0; x < n; x++) {
+        for (let x = 0; x < m[y].length; x++) {
             row.push(m[y][x] * k);
         }
         ret.push(row);
@@ -155,6 +155,7 @@ function matScale(m, k) {
 }
 
 function matComatrix(m) {
+    if (m[0].length !== m.length) throw new Error(`${m[0].length} !== ${m.length}`);
     const n = m[0].length;
     const ret = [];
     for (let y = 0; y < n; y++) {
@@ -167,14 +168,55 @@ function matComatrix(m) {
     return ret;
 }
 
-function matInv(m) {
-    const det = matDet(m);
+function matInv(A) {
+    const rows = A.length;
+    const cols = A[0].length;
+    if (cols === rows + 1) {
+        // Affine inverse.
+        let b = matCol(A, cols-1);
+        const B = A.map(r => r.slice(0, rows));
+        const ret = matInv(B);
+        const bPrime = matMulVec(ret, b);
+        for (let y = 0; y < rows; y++) {
+            ret[y].push(-bPrime[y]);
+        }
+        return ret;
+    }
+
+    const det = matDet(A);
     //console.log('matDet', det);
-    const comat = matComatrix(m);
+    const comat = matComatrix(A);
     //console.log('comat', matString(comat));
     const adj = matTrans(comat);
     //console.log('adj', matString(adj));
     const inv = matScale(adj, 1/det);
     //console.log('inv', matString(inv));
     return inv;
+}
+
+function matIdent(n) {
+    const ret = [];
+    for (let y = 0; y < n; y++) {
+        const row = [];
+        for (let x = 0; x < n; x++) {
+            let val = 0;
+            if (x == y) {
+                val = 1;
+            }
+            row.push(val);
+        }
+        ret.push(row);
+    }
+    return ret;
+}
+
+function matSquare(m) {
+    const n = Math.max(m.length, m[0].length);
+    const ret = matIdent(n);
+    for (let y = 0; y < m.length; y++) {
+        for (let x = 0; x < m[y].length; x++) {
+            ret[y][x] = m[y][x];
+        }
+    }
+    return ret;
 }
