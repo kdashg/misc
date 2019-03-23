@@ -27,8 +27,8 @@ Color space: <select id='e_color_space'>
 </select>
 <br>Precision: <input id='e_precision' value='5'>
 <br><input type='button' value='recalc' onclick='recalc();'>
-<pre id='e_rgbToYcbcr'>-</pre>
-<pre id='e_ycbcrToRgb'>-</pre>
+<pre id='e_ycbcrFromRgb'>-</pre>
+<pre id='e_rgbFromYcbcr'>-</pre>
 <hr>
 
 RGB: <input id='e_r'> <input id='e_g'> <input id='e_b'>
@@ -139,10 +139,10 @@ function recalc() {
     }
 
     ycbcrFromRgb = matMul(ycbcrFromYuv, yuvFromRgb);
-    e_rgbToYcbcr.textContent = 'ycbcrFromRgb = \n' + fnMatToString(ycbcrFromRgb, precision);
+    e_ycbcrFromRgb.textContent = 'ycbcrFromRgb = \n' + fnMatToString(ycbcrFromRgb, precision);
 
     rgbFromYcbcr = matInv(ycbcrFromRgb);
-    e_ycbcrToRgb.textContent = 'rgbFromYcbcr = \n' + fnMatToString(rgbFromYcbcr, precision);
+    e_rgbFromYcbcr.textContent = 'rgbFromYcbcr = \n' + fnMatToString(rgbFromYcbcr, precision);
 
     //const back = matInv(rgbFromYcbcr);
     //console.log('ycbcrFromRgb-1-1', fnMatToString(back));
