@@ -14,16 +14,20 @@ WebGLFeatureLevels = (function() {
 
     const kLevels = {};
     kLevels[100] = {
+        support: '98% of total users',
         exts: [],
         limits: {},
     };
     kLevels[101] = {
+        support: '97% of webgl users',
         exts: [
             'ANGLE_instanced_arrays',
-            'EXT_texture_filter_anisotropic',
+            'EXT_blend_minmax',
             'OES_element_index_uint',
             'OES_standard_derivatives',
+            'OES_vertex_array_object',
             'WEBGL_debug_renderer_info',
+            'WEBGL_lose_context',
         ],
         limits: {
             MAX_CUBE_MAP_TEXTURE_SIZE: 4096,
@@ -44,13 +48,13 @@ WebGLFeatureLevels = (function() {
         },
     };
     kLevels[102] = {
+        support: '90% of desktop webgl users, 60% of mobile webgl users',
         exts: kLevels[101].exts.concat([
-            'EXT_frag_depth',
+            'EXT_texture_filter_anisotropic',
             'OES_texture_float',
             'OES_texture_float_linear',
             'OES_texture_half_float',
             'OES_texture_half_float_linear',
-            //'OES_vertex_array_object', // no Edge
             'WEBGL_depth_texture',
         ]),
         limits: concatObj(kLevels[101].limits, {
@@ -59,12 +63,14 @@ WebGLFeatureLevels = (function() {
         }),
     };
     kLevels[103] = {
+        support: '70% of desktop webgl users, 1% of mobile webgl users',
         exts: kLevels[102].exts.concat([
-            'EXT_blend_minmax', // no Edge
-            'EXT_shader_texture_lod',
-            'EXT_sRGB',
-            'WEBGL_draw_buffers', // no Edge
+            'EXT_frag_depth', // no WebGL1-on-ES3 [1]
+            'EXT_shader_texture_lod', // [1]
+            'EXT_sRGB', // no Edge
+            'WEBGL_draw_buffers', // [1]
         ]),
+        // [1]: https://bugzilla.mozilla.org/show_bug.cgi?id=1526498
         limits: concatObj(kLevels[102].limits, {
             MAX_CUBE_MAP_TEXTURE_SIZE: 8192,
             MAX_RENDERBUFFER_SIZE: 8192,
@@ -81,15 +87,18 @@ WebGLFeatureLevels = (function() {
         }),
     };
     kLevels[200] = {
+        support: '70% of total desktop users, 80% of total Android users, no iOS',
         exts: [],
         limits: {},
     };
     kLevels[201] = {
+        support: '97% of desktop webgl2 users, 50% of mobile webgl2 users',
         exts: [
             'EXT_color_buffer_float',
             'EXT_texture_filter_anisotropic',
             'OES_texture_float_linear',
             'WEBGL_debug_renderer_info',
+            'WEBGL_lose_context',
         ],
         limits: {
             MAX_CUBE_MAP_TEXTURE_SIZE: 8192,
