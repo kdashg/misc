@@ -159,10 +159,20 @@ function refreshRangeInfo() {
     const normalizer = (1 << bits) - 1;
 
     if (e_range_type.value == 'full') {
+        // rec2020 defines these:
+        // Y: D = Round((2^n-1) * E) | E = [0.0, 1.0]
+        // AKA Dy = 255*Ey + 0
+        // Cb,Cr: D = Round((2^n-1) * E + 2^(n-1)) | E = [-0.5, 0.5]
+        // AKA Dcb,Dcr = 255*Ey + 128, or 128 +/- 127.5
         e_yq_min.value = 0;
         e_yq_max.value = normalizer;
-        e_uvq_min.value = 1;
-        e_uvq_max.value = normalizer;
+        e_uvq_min.value = 0.5; // [1]
+        e_uvq_max.value = normalizer + 0.5; // [1]
+
+        // [1]: What's with the 0.5 offsets? The spec defines e.g. `128 +/- 127.5`.
+        // We may never know why they didn't pick the much cleaner `128 +/- 127`:
+        // Cb,Cr: D = Round(2^n * E + 2^(n-1))
+        // Alas!
     } else {
         let y0 = 16;
         let y1 = 235; // 16+219
