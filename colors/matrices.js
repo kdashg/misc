@@ -194,11 +194,13 @@ function matInv(A) {
     return inv;
 }
 
-function matIdent(n) {
+function matIdent(m_rows, n_cols) {
+    n_cols = n_cols || m_rows;
+
     const ret = [];
-    for (let y = 0; y < n; y++) {
+    for (let y = 0; y < m_rows; y++) {
         const row = [];
-        for (let x = 0; x < n; x++) {
+        for (let x = 0; x < n_cols; x++) {
             let val = 0;
             if (x == y) {
                 val = 1;
@@ -210,12 +212,11 @@ function matIdent(n) {
     return ret;
 }
 
-function matSquare(m) {
-    const n = Math.max(m.length, m[0].length);
-    const ret = matIdent(n);
-    for (let y = 0; y < m.length; y++) {
-        for (let x = 0; x < m[y].length; x++) {
-            ret[y][x] = m[y][x];
+function matResized(A, m_rows, n_cols) {
+    const ret = matIdent(m_rows, n_cols);
+    for (let y = 0; y < Math.min(A.length, ret.length); y++) {
+        for (let x = 0; x < Math.min(A[y].length, ret[y].length); x++) {
+            ret[y][x] = A[y][x];
         }
     }
     return ret;
