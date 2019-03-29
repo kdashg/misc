@@ -180,3 +180,21 @@ For instance, WebGL-RR (https://raw.githubusercontent.com/jdashg/webgl-rr/master
 ## Arch Linux
 
 Key issues with pacman? Reinstall archlinux-keyring separately: `pacman -S archlinux-keyring`
+
+## Find and replace in files
+
+`grep -lrE | xargs -l sed -i s#find#replacement#`
+
+`grep`:
+* `-l`: List files containing matches
+* `-r`: Recurse into directories
+* `-E`: "Extended" regex instead "basic" regex. Basic is missing support for +, for example.
+
+`xargs`:
+* `-l`: One invocation per stdin line (Technically `-L 1` is preferred by POSIX)
+* `-n N`: Max of N stdin args per invocation
+* `-P N`: Spawn P processes at a time. (default 1)
+
+`sed`:
+* `-i`: Operate in-place
+* `s#find#replacement#`: Most people are used to s/foo/bar/, but sed thankfully lets you use a different separator
