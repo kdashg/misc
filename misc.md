@@ -26,6 +26,19 @@ $ git config --unset branch.my_branch_name.base
 $ git config --unset branch.my_branch_name.base-upstream
 ~~~
 
+### `depot_tools.bat`
+
+I have a `depot_tools.bat` script that creates a shell that's prepped for using depot_tools, instead of modifying global PATH/envvars.
+
+~~~
+@title depot_tools cmd
+SET PATH=%PATH%C:\dev\depot_tools;
+SET DEPOT_TOOLS_WIN_TOOLCHAIN=0
+@cmd
+~~~
+
+In this shell, git-cl/gclient/gn/ninja/etc should Just Work.
+
 ## Git on Windows
 
 You basically need Git Bash, even if you choose not to use that shell.
