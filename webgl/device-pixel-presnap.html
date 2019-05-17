@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+  </head>
+  <body>
+    <canvas id='e_canvas'></canvas>
+    <script>
+
+function ASSERT(cond, text) {
+  if (!cond) {
+    text = 'Assertion hit: ' + text;
+    throw new Error(text);
+  }
+}
+
+// -
+
+document.body.style.marginTop = '0px';
+document.body.style.marginBottom = '0px';
+document.body.style.marginLeft = '0px';
+document.body.style.marginRigth = '0px';
+document.body.style.width = '100vw';
+document.body.style.height = '100vh';
+const orig_body_rect = document.body.getBoundingClientRect();
+console.log('orig_body_rect', orig_body_rect);
+console.log('window.devicePixelRatio', window.devicePixelRatio);
+
+function resize_presnapped(e, w, h) {
+  e.width = (w * window.devicePixelRatio) | 0;
+  e.height = (h * window.devicePixelRatio) | 0;
+  e.style.width = (e.width / window.devicePixelRatio) + 'px';
+  e.style.height = (e.height / window.devicePixelRatio) + 'px';
+
+  console.log(`${w}x${h} => ${e.width}x${e.height} @ ${e.style.width}x${e.style.height}`);
+}
+const attribs = {
+  alpha: false,
+  premultipliedAlpha: true,
+  antialias: false,
+  depth: false,
+  stencil: false,
+  preserveDrawingBuffer: false,
+};
+const gl = e_canvas.getContext('webgl2', attribs);
+ASSERT(gl);
+ASSERT(gl.drawingBufferWidth == gl.canvas.width);
+ASSERT(gl.drawingBufferHeight == gl.canvas.height);
+
+let frame_id = 0;
+function frame() {
+  requestAnimationFrame(frame);
+  frame_id += 1;
+
+  const t = performance.now() / 1000;
+  const k = (2.0 + Math.cos(t)) / 3.0;
+
+  resize_presnapped(e_canvas, k * orig_body_rect.width, k * orig_body_rect.height);
+
+  if (frame_id % 6 == 0) {
+    e_canvas.style.marginTop = 30 * Math.sin(t/3) + 'px';
+    e_canvas.style.marginLeft = 30 * Math.cos(t/3) + 'px';
+  }
+
+  gl.clearColor(1, 1, 1, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.enable(gl.SCISSOR_TEST);
+
+  gl.clearColor(1, 0, 0, 1);
+  for (let i = 0; i < e_canvas.width; i += 2) {
+    gl.scissor(i, 0, 1, e_canvas.height);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  gl.clearColor(0, 0, 1, 1);
+  for (let i = 0; i < e_canvas.height; i += 2) {
+    gl.scissor(0, e_canvas.height - i - 1, e_canvas.width, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+}
+frame();
+
+    </script>
+  </body>
+</html>
