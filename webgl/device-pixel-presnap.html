@@ -16,14 +16,10 @@ function ASSERT(cond, text) {
 
 // -
 
-document.body.style.marginTop = '0px';
-document.body.style.marginBottom = '0px';
-document.body.style.marginLeft = '0px';
-document.body.style.marginRigth = '0px';
-document.body.style.width = '100vw';
-document.body.style.height = '100vh';
-const orig_body_rect = document.body.getBoundingClientRect();
-console.log('orig_body_rect', orig_body_rect);
+const RECT = {
+  width: 400,
+  height: 225,
+};
 console.log('window.devicePixelRatio', window.devicePixelRatio);
 
 function resize_presnapped(e, w, h) {
@@ -55,7 +51,7 @@ function frame() {
   const t = performance.now() / 1000;
   const k = (2.0 + Math.cos(t)) / 3.0;
 
-  resize_presnapped(e_canvas, k * orig_body_rect.width, k * orig_body_rect.height);
+  resize_presnapped(e_canvas, k * RECT.width, k * RECT.height);
 
   if (frame_id % 6 == 0) {
     e_canvas.style.marginTop = 30 * Math.sin(t/3) + 'px';
