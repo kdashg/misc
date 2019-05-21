@@ -38,7 +38,7 @@ const attribs = {
   stencil: false,
   preserveDrawingBuffer: false,
 };
-const gl = e_canvas.getContext('webgl2', attribs);
+const gl = e_canvas.getContext('webgl', attribs);
 ASSERT(gl);
 ASSERT(gl.drawingBufferWidth == gl.canvas.width);
 ASSERT(gl.drawingBufferHeight == gl.canvas.height);
