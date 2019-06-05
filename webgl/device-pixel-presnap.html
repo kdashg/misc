@@ -19,10 +19,6 @@ function ASSERT(cond, text) {
 
 // -
 
-console.log('window.devicePixelRatio', window.devicePixelRatio);
-let DPR = window.devicePixelRatio;
-DPR = 2*1440 / 1920;
-
 function snap_to_parent_pixels(e) {
   const p = e.parentNode;
   const p_rect = p.getBoundingClientRect();
@@ -37,7 +33,6 @@ function snap_to_parent_pixels(e) {
   };
   device_rect.width = device_rect.right - device_rect.left;
   device_rect.height = device_rect.bottom - device_rect.top;
-
 
   e.style.position = 'absolute';
   e.style.width = (device_rect.width) / DPR + 'px';
