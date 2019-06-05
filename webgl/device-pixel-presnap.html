@@ -10,6 +10,8 @@
     </div>
     <script>
 
+document.body.style.height = '200vh';
+
 function ASSERT(cond, text) {
   if (!cond) {
     text = 'Assertion hit: ' + text;
@@ -22,33 +24,33 @@ function ASSERT(cond, text) {
 function snap_to_parent_pixels(e) {
   const p = e.parentNode;
   const p_rect = p.getBoundingClientRect();
-
   const DPR = window.devicePixelRatio;
 
-  const device_rect = {
-    top   : Math.round(p_rect.top    * DPR),
-    bottom: Math.round(p_rect.bottom * DPR),
-    left  : Math.round(p_rect.left   * DPR),
-    right : Math.round(p_rect.right  * DPR),
+  const device_rect = {};
+  for (const k in p_rect) {
+    if (k == 'toJSON') continue;
+    device_rect[k] = Math.round(p_rect[k] * DPR);
   };
-  device_rect.width = device_rect.right - device_rect.left;
-  device_rect.height = device_rect.bottom - device_rect.top;
 
-  e.style.position = 'absolute';
-  e.style.width = (device_rect.width) / DPR + 'px';
-  e.style.height = (device_rect.height) / DPR + 'px';
+  e.style.position = 'fixed';
+  e.style.top = device_rect.top / DPR + 'px';
+  e.style.left = device_rect.left / DPR + 'px';
+  e.style.width = device_rect.width / DPR + 'px';
+  e.style.height = device_rect.height / DPR + 'px';
 
   e_info.textContent = [
     'window.devicePixelRatio: ' + DPR,
     'screen.width: ' + screen.width,
     'screen.height: ' + screen.height,
-    'parent_rect.w: ' + p_rect.width,
-    'parent_rect.h: ' + p_rect.height,
-    'device_rect.w: ' + device_rect.width,
-    'device_rect.h: ' + device_rect.height,
+    'window.pageXOffset: ' + window.pageXOffset,
+    'screen.pageYOffset: ' + window.pageYOffset,
+    'parent_rect: ' + JSON.stringify(p_rect).replace(/,/g, '\n   '),
+    'device_rect: ' + JSON.stringify(device_rect).replace(/,/g, '\n   '),
+    'e.style.top: ' + e.style.top,
+    'e.style.left: ' + e.style.left,
     'e.style.width: ' + e.style.width,
     'e.style.height: ' + e.style.height,
-  ].join('\n')
+  ].join('\n');
 
   return device_rect;
 }
@@ -92,16 +94,18 @@ function frame() {
   gl.enable(gl.SCISSOR_TEST);
 
   gl.clearColor(1, 0, 0, 1);
-  for (let x = dev_rect.left; x < dev_rect.right; x++) {
-    if (x % 2 == 0) continue;
-    gl.scissor(x - dev_rect.left, 0, 1, e_canvas.height);
+  for (let x = 0; x < e_canvas.width; x++) {
+    const dev_x = dev_rect.x + x;
+    if (dev_x % 2 == 0) continue;
+    gl.scissor(x, 0, 1, e_canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
   gl.clearColor(0, 0, 1, 1);
-  for (let y = dev_rect.top; y < dev_rect.bottom; y++) {
-    if (y % 2 == 0) continue;
-    gl.scissor(0, e_canvas.height - (y - dev_rect.top) - 1, e_canvas.width, 1);
+  for (let y = 0; y < e_canvas.height; y++) {
+    const dev_y = dev_rect.y + y;
+    if (dev_y % 2 == 0) continue;
+    gl.scissor(0, e_canvas.height - y - 1, e_canvas.width, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
 }
