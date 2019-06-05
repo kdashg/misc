@@ -4,7 +4,10 @@
     <meta charset='utf-8'>
   </head>
   <body>
-    <canvas id='e_canvas'></canvas>
+    <pre id='e_info'></pre>
+    <div id='e_parent'>
+      <canvas id='e_canvas'></canvas>
+    </div>
     <script>
 
 function ASSERT(cond, text) {
@@ -16,20 +19,43 @@ function ASSERT(cond, text) {
 
 // -
 
-const RECT = {
-  width: 400,
-  height: 225,
-};
 console.log('window.devicePixelRatio', window.devicePixelRatio);
+let DPR = window.devicePixelRatio;
+DPR = 2*1440 / 1920;
 
-function resize_presnapped(e, w, h) {
-  e.width = (w * window.devicePixelRatio) | 0;
-  e.height = (h * window.devicePixelRatio) | 0;
-  e.style.width = (e.width / window.devicePixelRatio) + 'px';
-  e.style.height = (e.height / window.devicePixelRatio) + 'px';
+function snap_to_parent_pixels(e) {
+  const p = e.parentNode;
+  const p_rect = p.getBoundingClientRect();
 
-  console.log(`${w}x${h} => ${e.width}x${e.height} @ ${e.style.width}x${e.style.height}`);
+  const DPR = window.devicePixelRatio;
+
+  const device_rect = {
+    top   : Math.round(p_rect.top    * DPR),
+    bottom: Math.round(p_rect.bottom * DPR),
+    left  : Math.round(p_rect.left   * DPR),
+    right : Math.round(p_rect.right  * DPR),
+  };
+  device_rect.width = device_rect.right - device_rect.left;
+  device_rect.height = device_rect.bottom - device_rect.top;
+
+
+  e.style.position = 'absolute';
+  e.style.width = (device_rect.width) / DPR + 'px';
+  e.style.height = (device_rect.height) / DPR + 'px';
+
+  e_info.textContent = [
+    'window.devicePixelRatio: ' + DPR,
+    'parent_rect.w: ' + p_rect.width,
+    'parent_rect.h: ' + p_rect.height,
+    'device_rect.w: ' + device_rect.width,
+    'device_rect.h: ' + device_rect.height,
+    'e.style.width: ' + e.style.width,
+    'e.style.height: ' + e.style.height,
+  ].join('\n')
+
+  return device_rect;
 }
+
 const attribs = {
   alpha: false,
   premultipliedAlpha: true,
@@ -49,14 +75,19 @@ function frame() {
   frame_id += 1;
 
   const t = performance.now() / 1000;
-  const k = (2.0 + Math.cos(t)) / 3.0;
+  const k = (2.0 + Math.cos(t/2)) / 3.0;
 
-  resize_presnapped(e_canvas, k * RECT.width, k * RECT.height);
 
-  if (frame_id % 6 == 0) {
-    e_canvas.style.marginTop = 30 * Math.sin(t/3) + 'px';
-    e_canvas.style.marginLeft = 30 * Math.cos(t/3) + 'px';
+  if (frame_id % 1 == 0) {
+    e_parent.style.marginTop = 60 + 30 * Math.sin(t/1) + 'px';
+    e_parent.style.marginLeft = 40 + 30 * Math.cos(t/1) + 'px';
   }
+  e_parent.style.width = 400 * k + 'px';
+  e_parent.style.height = 300 * k + 'px';
+
+  const dev_rect = snap_to_parent_pixels(e_canvas);
+  e_canvas.width = dev_rect.width;
+  e_canvas.height = dev_rect.height;
 
   gl.clearColor(1, 1, 1, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
@@ -64,19 +95,20 @@ function frame() {
   gl.enable(gl.SCISSOR_TEST);
 
   gl.clearColor(1, 0, 0, 1);
-  for (let i = 0; i < e_canvas.width; i += 2) {
-    gl.scissor(i, 0, 1, e_canvas.height);
+  for (let x = dev_rect.left; x < dev_rect.right; x++) {
+    if (x % 2 == 0) continue;
+    gl.scissor(x - dev_rect.left, 0, 1, e_canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
   gl.clearColor(0, 0, 1, 1);
-  for (let i = 0; i < e_canvas.height; i += 2) {
-    gl.scissor(0, e_canvas.height - i - 1, e_canvas.width, 1);
+  for (let y = dev_rect.top; y < dev_rect.bottom; y++) {
+    if (y % 2 == 0) continue;
+    gl.scissor(0, e_canvas.height - (y - dev_rect.top) - 1, e_canvas.width, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
 }
 frame();
-
     </script>
   </body>
 </html>
