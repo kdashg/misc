@@ -5,7 +5,7 @@
   </head>
   <body>
     Max frames: <input type='number' id='e_max_frames' value='32'>
-    <br><input type='checkbox' id='e_even_only'>Workaround: macOS+Chrome odd-sized snapping issue.
+    <br><input type='checkbox' id='e_even_only'>Workaround: macOS+Chrome non-devicePixelRatio-multiple snapping issue.
     <br><input type='button' id='e_restart' value='Restart'>
     <pre id='e_info'></pre>
     <div id='e_parent'>
@@ -48,12 +48,13 @@ function snap_to_parent_pixels(e) {
   const client_rect = e.parentNode.getBoundingClientRect();
   const device_rect = client_to_device_rect(client_rect);
 
-  // Chrome doesn't snap odd-sized canvases properly.
+  // Chrome doesn't snap non-DPR-multiple canvases properly.
   if (e_even_only.checked) {
+    const DPR = window.devicePixelRatio;
     for (const k of ['width', 'height']) {
       let cur = device_rect[k];
-      if (cur % 2 == 1 && cur != 1) {
-        cur -= 1;
+      if (cur >= DPR) {
+        cur -= cur % DPR;
       }
       device_rect[k] = cur;
     }
