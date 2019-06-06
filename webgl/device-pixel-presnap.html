@@ -4,6 +4,9 @@
     <meta charset='utf-8'>
   </head>
   <body>
+    Max frames: <input type='number' id='e_max_frames' value='32'>
+    <br><input type='checkbox' id='e_even_only'>Workaround: macOS+Chrome odd-sized snapping issue.
+    <br><input type='button' id='e_restart' value='Restart'>
     <pre id='e_info'></pre>
     <div id='e_parent'>
       <canvas id='e_canvas'></canvas>
@@ -21,31 +24,51 @@ function ASSERT(cond, text) {
 
 // -
 
-function snap_to_parent_pixels(e) {
-  const p = e.parentNode;
-  const p_rect = p.getBoundingClientRect();
+function client_to_device_rect(css_rect) {
   const DPR = window.devicePixelRatio;
 
   const device_rect = {};
-  for (const k in p_rect) {
+  for (const k in css_rect) {
     if (k == 'toJSON') continue;
-    device_rect[k] = Math.round(p_rect[k] * DPR);
+    device_rect[k] = Math.round(css_rect[k] * DPR);
   };
+  return device_rect;
+}
 
+function snap_to_device_rect(e, device_rect) {
+  const DPR = window.devicePixelRatio;
   e.style.position = 'fixed';
   e.style.top = device_rect.top / DPR + 'px';
   e.style.left = device_rect.left / DPR + 'px';
   e.style.width = device_rect.width / DPR + 'px';
   e.style.height = device_rect.height / DPR + 'px';
+}
+
+function snap_to_parent_pixels(e) {
+  const client_rect = e.parentNode.getBoundingClientRect();
+  const device_rect = client_to_device_rect(client_rect);
+
+  // Chrome doesn't snap odd-sized canvases properly.
+  if (e_even_only.checked) {
+    for (const k of ['width', 'height']) {
+      let cur = device_rect[k];
+      if (cur % 2 == 1 && cur != 1) {
+        cur -= 1;
+      }
+      device_rect[k] = cur;
+    }
+  }
+
+  snap_to_device_rect(e, device_rect);
 
   e_info.textContent = [
-    'window.devicePixelRatio: ' + DPR,
+    'window.devicePixelRatio: ' + window.devicePixelRatio,
     'screen.width: ' + screen.width,
     'screen.height: ' + screen.height,
     'window.pageXOffset: ' + window.pageXOffset,
     'screen.pageYOffset: ' + window.pageYOffset,
-    'parent_rect: ' + JSON.stringify(p_rect).replace(/,/g, '\n   '),
-    'device_rect: ' + JSON.stringify(device_rect).replace(/,/g, '\n   '),
+    'client_rect: ' + JSON.stringify(client_rect).replace(/,/g, ',\n   '),
+    'device_rect: ' + JSON.stringify(device_rect).replace(/,/g, ',\n   '),
     'e.style.top: ' + e.style.top,
     'e.style.left: ' + e.style.left,
     'e.style.width: ' + e.style.width,
@@ -73,16 +96,18 @@ function frame() {
   requestAnimationFrame(frame);
   frame_id += 1;
 
-  const t = performance.now() / 1000;
-  const k = (2.0 + Math.cos(t/2)) / 3.0;
+  if (frame_id < e_max_frames.value) {
+    let t = performance.now() / 1000;
+    t = frame_id / 60;
+    const k = (2.0 + Math.cos(t/2)) / 3.0;
 
-
-  if (frame_id % 1 == 0) {
-    e_parent.style.marginTop = 60 + 30 * Math.sin(t/1) + 'px';
-    e_parent.style.marginLeft = 40 + 30 * Math.cos(t/1) + 'px';
+    if (frame_id % 1 == 0) {
+      e_parent.style.marginTop = 60 + 30 * Math.sin(t/1) + 'px';
+      e_parent.style.marginLeft = 40 + 30 * Math.cos(t/1) + 'px';
+    }
+    e_parent.style.width = 400 * k + 'px';
+    e_parent.style.height = 300 * k + 'px';
   }
-  e_parent.style.width = 400 * k + 'px';
-  e_parent.style.height = 300 * k + 'px';
 
   const dev_rect = snap_to_parent_pixels(e_canvas);
   e_canvas.width = dev_rect.width;
@@ -110,6 +135,9 @@ function frame() {
   }
 }
 frame();
+e_restart.addEventListener('click', () => {
+  frame_id = 0;
+});
     </script>
   </body>
 </html>
