@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+  </head>
+  <body>
+    <div id='e_offset'></div>
+    <p>e.style.left: <input id='e_css_left'>, .top <input id='e_css_top'>
+    <p>e.width: <input id='e_css_width'>, .height: <input id='e_css_height'>
+    <p>canvas.width: <input id='e_canvas_width'>, .height: <input id='e_canvas_height'>
+    <pre id='e_info'></pre>
+    <canvas id='e_canvas'></canvas>
+    <script>
+
+document.body.style.height = '200vh';
+
+function ASSERT(cond, text) {
+  if (!cond) {
+    text = 'Assertion hit: ' + text;
+    throw new Error(text);
+  }
+}
+
+// -
+
+const attribs = {
+  alpha: false,
+  premultipliedAlpha: true,
+  antialias: false,
+  depth: false,
+  stencil: false,
+  preserveDrawingBuffer: false,
+};
+e_canvas.style.position = 'fixed';
+e_canvas.width = 100;
+e_canvas.height = 100;
+const gl = e_canvas.getContext('webgl', attribs);
+ASSERT(gl);
+ASSERT(gl.drawingBufferWidth == gl.canvas.width);
+ASSERT(gl.drawingBufferHeight == gl.canvas.height);
+
+e_canvas_width.value = Math.round(e_canvas.width * devicePixelRatio);
+e_canvas_height.value = Math.round(e_canvas.height * devicePixelRatio);
+e_css_top.value = 0 / devicePixelRatio;
+e_css_left.value = 0 / devicePixelRatio;
+e_css_width.value =  e_canvas_width.value / devicePixelRatio;
+e_css_height.value = e_canvas_height.value / devicePixelRatio;
+
+let frame_id = 0;
+function frame() {
+  requestAnimationFrame(frame);
+  frame_id += 1;
+
+  e_canvas.style.top = e_css_top.value + 'px';
+  e_canvas.style.left = e_css_left.value + 'px';
+  e_canvas.style.width = e_css_width.value + 'px';
+  e_canvas.style.height = e_css_height.value + 'px';
+  e_canvas.width = e_canvas_width.value;
+  e_canvas.height = e_canvas_height.value;
+
+  e_offset.style.height = e_canvas.style.height;
+
+  const rect = e_canvas.getBoundingClientRect();
+  e_info.textContent = [
+    'window.devicePixelRatio: ' + devicePixelRatio,
+    'screen.width: ' + screen.width,
+    'screen.height: ' + screen.height,
+    'window.pageXOffset: ' + window.pageXOffset,
+    'screen.pageYOffset: ' + window.pageYOffset,
+    'e_canvas rect: ' + JSON.stringify(rect).replace(/,/g, '\n   '),
+  ].join('\n');
+
+  gl.clearColor(1, 1, 1, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.enable(gl.SCISSOR_TEST);
+
+  gl.clearColor(1, 0, 0, 1);
+  for (let x = 0; x < e_canvas.width; x++) {
+    if (x % 2 == 0) continue;
+    gl.scissor(x, 0, 1, e_canvas.height);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  gl.clearColor(0, 0, 1, 1);
+  for (let y = 0; y < e_canvas.height; y++) {
+    if (y % 2 == 0) continue;
+    gl.scissor(0, e_canvas.height - y - 1, e_canvas.width, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+}
+frame();
+    </script>
+  </body>
+</html>
