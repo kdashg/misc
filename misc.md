@@ -211,3 +211,7 @@ Key issues with pacman? Reinstall archlinux-keyring separately: `pacman -S archl
 `sed`:
 * `-i`: Operate in-place
 * `s#find#replacement#`: Most people are used to s/foo/bar/, but sed thankfully lets you use a different separator
+
+## Minimal Firefox subdir rebuilds
+
+`./mach build install-manifests && ./mach build dom/canvas`
