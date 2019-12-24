@@ -42,18 +42,11 @@ Syslinux was installed on the first logical partition (/dev/sda5) of the disk.
 
 # After first boot
 
-## No ethernet on first start, so setup netctl
+## No ethernet on first start, so setup networkd. (netctl is no longer installed by default :( )
 
 ~~~
-$ cd /etc/netctl
-$ cp examples/ethernet-dhcp .
-~~~
-
-In `ethernet-dhcp`, update 'Interface' (from `ip link`) and uncomment `IP6=stateless`.
-
-~~~
-$ netctl enable ethernet-dhcp
-$ netctl start ethernet-dhcp
+$ systemctl start systemd-networkd
+$ systemctl start systemd-resolved
 ~~~
 
 ## Create a user
@@ -75,7 +68,7 @@ $ echo 'exec startxfce4' > ~/.xinitrc
 $ startx ((when desired))
 ~~~
 
-## Lockscreen
+### Lockscreen
 
 ~~~
 $ pacman -S slock
