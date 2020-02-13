@@ -1,0 +1,62 @@
+<html>
+<head></head>
+<body>
+<canvas id='e_canvas'></canvas>
+<pre id='e_log'>[...]
+<script>
+
+    const gl = e_canvas.getContext('webgl', {antialias: false});
+    // WebGL fingerprinting is a combination of techniques, found in MaxMind antifraud script & Augur fingerprinting.
+    // First it draws a gradient object with shaders and convers the image to the Base64 string.
+    // Then it enumerates all WebGL extensions & capabilities and appends them to the Base64 string, resulting in a huge WebGL string, potentially very unique on each device
+    // Since iOS supports webgl starting from version 8.1 and 8.1 runs on several graphics chips, the results may be different across ios devices, but we need to verify it.
+    var result = []
+    var vShaderTemplate = 'attribute vec2 attrVertex;varying vec2 varyinTexCoordinate;uniform vec2 uniformOffset;void main(){varyinTexCoordinate=attrVertex+uniformOffset;gl_Position=vec4(attrVertex,0,1);}'
+    var fShaderTemplate = 'precision mediump float;varying vec2 varyinTexCoordinate;void main() {gl_FragColor=vec4(varyinTexCoordinate,0,1);}'
+    var vertexPosBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexPosBuffer)
+    var vertices = new Float32Array([-0.2, -0.9, 0, 0.4, -0.26, 0, 0, 0.732134444, 0])
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+    vertexPosBuffer.itemSize = 3
+    vertexPosBuffer.numItems = 3
+    var program = gl.createProgram()
+    var vshader = gl.createShader(gl.VERTEX_SHADER)
+    gl.shaderSource(vshader, vShaderTemplate)
+    gl.compileShader(vshader)
+    var fshader = gl.createShader(gl.FRAGMENT_SHADER)
+    gl.shaderSource(fshader, fShaderTemplate)
+    gl.compileShader(fshader)
+    gl.attachShader(program, vshader)
+    gl.attachShader(program, fshader)
+    gl.linkProgram(program)
+    gl.useProgram(program)
+    program.vertexPosAttrib = gl.getAttribLocation(program, 'attrVertex')
+    program.offsetUniform = gl.getUniformLocation(program, 'uniformOffset')
+    gl.enableVertexAttribArray(program.vertexPosArray)
+    gl.vertexAttribPointer(program.vertexPosAttrib, vertexPosBuffer.itemSize, gl.FLOAT, !1, 0, 0)
+    gl.uniform2f(program.offsetUniform, 1, 1)
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, vertexPosBuffer.numItems)
+
+    e_log.textContent = `${gl.canvas.width}x${gl.canvas.height}`;
+    e_log.textContent += '\nRENDERER: ' + gl.getParameter(gl.RENDERER);
+    const dri = gl.getExtension('WEBGL_debug_renderer_info');
+    e_log.textContent += '\nUNMASKED_RENDERER: ' + gl.getParameter(dri.UNMASKED_RENDERER_WEBGL);
+    const p = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
+    gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, p);
+    (async function() {
+        let h = await crypto.subtle.digest('sha-1', p);
+      h = new Uint8Array(h);
+      console.log(h);
+      const hs = [].map.call(h, x => {
+        let s = x.toString(16);
+        if (s.length == 1) {
+          s = '0' + s;
+        }
+        console.log(s);
+        return s;
+      }).join('');
+      e_log.textContent += '\n' + hs;
+    })();
+</script>
+</body>
+</html>
