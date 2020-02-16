@@ -9,6 +9,8 @@
    // * WEBGL_lose_context
    // Include this library to modify WebGL 1.0 into 1.1 by including these extensions.
 
+   if (WebGLRenderingContext.prototype.drawArraysInstanced) return;
+
    // -
 
    let prev = WebGLRenderingContext.prototype.getParameter;
