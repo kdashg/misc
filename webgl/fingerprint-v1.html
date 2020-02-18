@@ -27,7 +27,20 @@ async function for_context(type, attribs) {
    const canvas = document.createElement('canvas');
    section.appendChild(canvas);
 
+   const json_elem = document.createElement('pre');
+   section.appendChild(json_elem);
+
+   const info = {
+      type: type,
+      attribs: attribs,
+      renderer: null,
+   };
+
    const gl = canvas.getContext(type, attribs);
+   if (!gl) {
+      json_elem.textContent = JSON.stringify(info, null, 3);
+      return info;
+   }
    // WebGL fingerprinting is a combination of techniques, found in MaxMind antifraud script & Augur fingerprinting.
    // First it draws a gradient object with shaders and convers the image to the Base64 string.
    // Then it enumerates all WebGL extensions & capabilities and appends them to the Base64 string, resulting in a huge WebGL string, potentially very unique on each device
@@ -77,18 +90,9 @@ async function for_context(type, attribs) {
 
    //section.appendChild(text_div('readPixels hash: ' + hs));
 
-   const info = {
-      type: type,
-      attribs: attribs,
-      renderer: renderer,
-      pixel_hash: hs,
-   };
-
-   const json = JSON.stringify(info, null, 3);
-   const json_elem = document.createElement('pre');
-   json_elem.textContent = json;
-   section.appendChild(json_elem);
-
+   info.renderer = renderer;
+   info.pixel_hash = hs;
+   json_elem.textContent = JSON.stringify(info, null, 3);
    return info;
 }
 
