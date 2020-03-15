@@ -1,0 +1,19 @@
+{
+   "manifest_version": 2,
+   "name": "Content Script Injection Test",
+   "version": "1.0",
+
+   "content_scripts": [
+      {
+        "matches": ["https://*/*", "http://*/*", "file://*/*"],
+        "js": ["content-script.js"],
+        "run_at": "document_start",
+        "all_frames": true
+      }
+   ],
+
+   "web_accessible_resources": [
+      "injected-src.js",
+      "injected-text.js"
+   ]
+}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <meta charset='utf-8'>
+      <script>
+console.log('begin test.html <head><script>');
+      </script>
+   </head>
+   <body>
+      <script>
+console.log('begin test.html <body><script>');
+console.log('test.html: window.content_script_secret', window.content_script_secret);
+console.log('test.html: window.did_inject_src', window.did_inject_src);
+console.log('test.html: window.did_inject_text', window.did_inject_text);
+
+setTimeout(() => {
+   console.log('test.html delayed: window.content_script_secret', window.content_script_secret);
+   console.log('test.html delayed: window.did_inject_src', window.did_inject_src);
+   console.log('test.html delayed: window.did_inject_text', window.did_inject_text);
+});
+      </script>
+   </body>
+</html>
