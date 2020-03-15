@@ -76,3 +76,7 @@ test.html delayed: window.did_inject_src true                    test.html:18:12
 test.html delayed: window.did_inject_text true                   test.html:19:12
 ```
 
+## Production Examples
+
+* <https://github.com/jdashg/canvas-rr>
+* <https://github.com/jdashg/webgl-1on2>
