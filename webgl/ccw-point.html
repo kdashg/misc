@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset='UTF-8'>
+    <meta charset='utf-8'>
   </head>
   <body>
     <script id='vs' type='none'>
@@ -48,7 +48,7 @@ function ProgramByElemIds(gl, vsElem, fsElem) {
   if (success)
       return prog;
 
-  console.log('Error linking program for \'' + vsId + '\' and \'' + fsId + '\'.');
+  console.log('Error linking program');
   console.log('\nLink log: ' + gl.getProgramInfoLog(prog));
   console.log('\nVert shader log: ' + gl.getShaderInfoLog(vs));
   console.log('\nFrag shader log: ' + gl.getShaderInfoLog(fs));
