@@ -1,15 +1,28 @@
 </head>
 <body>
 <script>
-const c = document.createElement('canvas');
-const d = {
-  powerPreference: 'low-power',
-};
-const g = c.getContext('webgl', d);
-const ext = g.getExtension('WEBGL_debug_renderer_info');
-const r = g.getParameter(ext.UNMASKED_RENDERER_WEBGL);
-const elem = document.createElement('div');
-elem.innerText = r;
-document.body.appendChild(elem);
+
+function test(power_pref) {
+  const c = document.createElement('canvas');
+  const d = {
+    powerPreference: power_pref,
+  };
+  const g = c.getContext('webgl', d);
+  const ext = g.getExtension('WEBGL_debug_renderer_info');
+  const r = g.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+  const elem = document.createElement('pre');
+  elem.innerText = `
+${JSON.stringify(d)}
+  => ${r}
+`.trim();
+  document.body.appendChild(elem);
+
+  const lc = g.getExtension('WEBGL_lose_context');
+  lc.loseContext();
+}
+
+test('low-power');
+test();
+test('high-performance');
 </script>
 </body>
