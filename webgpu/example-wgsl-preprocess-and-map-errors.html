@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='utf-8'>
+</head>
+<body>
+
+#e_main:
+<br>
+<div style='display:flex; width=100%'>
+   <textarea id='e_lines' cols=2 disabled style='resize: none;'></textarea>
+   <textarea id='e_main' cols=80></textarea>
+</div>
+<br>
+WGSL translated error log:
+<br>
+<pre id='e_wgsl_log' style='display: inline-block; background-color: #ddd; border: 1px solid black;'></pre>
+<script>
+
+class PreprocdWgsl {
+   constructor(output, mapping) {
+      this.output = output;
+      this.mapping = mapping;
+   }
+
+   src_line_by_output_line(out_i) {
+      let map_entry = this.mapping[0];
+      for (const cur of this.mapping) {
+         if (cur[0] > out_i) break;
+         map_entry = cur;
+      }
+      const [out_start, in_start, in_line_file] = map_entry;
+      const in_i = out_i - out_start + in_start;
+      return [in_line_file, in_i];
+   }
+
+   map_errors(errors) {
+      const ret = [];
+      for (const raw_err of errors) {
+         const [mapped_file, mapped_line] = this.src_line_by_output_line(raw_err.line);
+         const mapped_err = {
+            line: mapped_line,
+            file: mapped_file,
+            text: raw_err.text,
+         };
+         ret.push(mapped_err);
+      }
+      return ret;
+   }
+};
+
+function preproc(src_text, file_name) {
+   file_name = file_name || '<main>';
+
+   const output_lines = [];
+   const mapping = [
+      [1, 1, file_name],
+   ];
+
+   const src_lines = src_text.split('\n');
+   for (const [i, line] of src_lines.entries()) {
+      const src_line_num = i + 1;
+      console.log(src_line_num, line);
+      if (line.startsWith('#line')) {
+         const cur_map = mapping[mapping.length-1];
+         let [_, next_line_num, new_name] = line.split(/ +/g);
+         console.log(next_line_num, new_name);
+         next_line_num |= 0;
+         new_name = new_name || cur_map[2];
+         mapping.push([src_line_num+1, next_line_num, new_name]);
+      }
+      output_lines.push(line);
+   }
+   const output = output_lines.join('\n');
+   return new PreprocdWgsl(output, mapping);
+}
+
+class GPUShaderError {
+   constructor(line_num, text) {
+      this.line = line_num;
+      this.text = text;
+   }
+};
+
+async function get_compile_errors(wgsl_text) {
+   // Get an error somehow, not currently in webgpu spec.
+   const errs = [];
+   let has_entrypoint_vertex = false;
+   for (const [i, line] of wgsl_text.split('\n').entries()) {
+      const line_num = (i|0) + 1;
+      if (line.includes("[[builtin position]] [[location 0]]")) {
+         errs.push(new GPUShaderError(line_num, '`builtin position` cannot have [[location]] decoration.'));
+      }
+      if (line.includes('entry_point vertex = ')) {
+         if (has_entrypoint_vertex) {
+            errs.push(new GPUShaderError(line_num, '`entrypoint vertex` already defined.'));
+         }
+         has_entrypoint_vertex = true;
+      }
+   }
+   return errs;
+}
+
+
+// ---------------
+
+async function refresh() {
+   const preprocd = preproc(e_main.textContent);
+   const wgsl = preprocd.output;
+
+   console.log(preprocd);
+   //console.log(preprocd.src_line_by_output_line(13));
+
+   const log_lines = [];
+   const errors = await get_compile_errors(wgsl);
+   const mapped_errors = preprocd.map_errors(errors);
+   for (const err of mapped_errors) {
+      const log_text = `${err.file}:${err.line}: ${err.text}`;
+      log_lines.push(log_text);
+   }
+   e_wgsl_log.textContent = log_lines.join('\n');
+}
+
+// ---------------
+
+function on_src_change(e) {
+   if (e) {
+      e_main.textContent = e.target.value;
+   }
+   e_main.style.height = 'auto';
+   e_main.style.height = e_main.scrollHeight + 'px';
+
+   const line_num_lines = e_main.textContent.split('\n').map((x,i) => '' + (i+1));
+   e_lines.textContent = line_num_lines.join('\n');
+   refresh();
+}
+e_main.addEventListener('input', on_src_change);
+
+function set_src(e, text) {
+   e.textContent = text;
+   on_src_change();
+}
+
+set_src(e_main, `
+#line 1 point_vert.vs
+
+[[builtin position]] [[location 0]] var<out> gl_Position : vec4<f32>;
+fn main() -> void {
+   gl_Position = vec4<f32>(0.4, 0.4, 0.8, 1.0);
+   return;
+}
+entry_point vertex = main;
+
+# -
+
+#line 1 main.wgsl
+[[location 0]] var<out> gl_FragColor : vec4<f32>;
+fn main() -> void {
+   gl_FragColor = vec4<f32>(0.4, 0.4, 0.8, 1.0);
+   return;
+}
+entry_point vertex = main;
+`.trim());
+
+
+</script>
+</body>
+</html>
