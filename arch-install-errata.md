@@ -1,6 +1,22 @@
 # During setup
 
+## Live CD copy-on-write partition too small
+
+*(c/o https://www.ostechnix.com/adjust-size-root-partition-live-arch-linux/)*
+
+### Option 1: At boot
+
+When you boot the Arch Linux livecd, press e or hit tab key to edit the kernel parameters.
+Go to the end of the line that says “…. linux=… initrd=….” something like that and append cow_spacesize=16G at the end to get 16GB size root partition or whatever space left from RAM.
+
+### Option 2: Live
+
+```
+# mount -o remount,size=16G /run/archiso/cowspace
+```
+
 ## mirrorlist
+
 ```
 # pacman -S reflector
 # pushd /etc/pacman.d
