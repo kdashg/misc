@@ -1,5 +1,13 @@
 # During setup
 
+## mirrorlist
+```
+# pacman -S reflector
+# pushd /etc/pacman.d
+# cp mirrorlist mirrorlist.bak
+# reflector --protocol https --country United\ States --score 10 > mirrorlist
+```
+
 ### If using syslinux for the bootloader
 syslinux can't use ext4 with the 64bit feature, which is now the default in mkfs.ext4.
 Instead, create without the 64bit feature:
