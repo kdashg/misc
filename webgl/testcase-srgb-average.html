@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='utf-8'>
+</head>
+<body>
+
+<canvas id='e_canvas1'></canvas>
+<br>
+<canvas id='e_canvas2'></canvas>
+
+<script>
+
+document.body.style.backgroundColor = '#808080';
+
+const gl = e_canvas1.getContext('webgl');
+gl.enable(gl.SCISSOR_TEST);
+
+const c2d = e_canvas2.getContext('2d');
+
+const W = gl.canvas.width;
+const H = gl.canvas.height;
+
+gl.canvas.style.width = (W / devicePixelRatio) + 'px';
+gl.canvas.style.height = (H / devicePixelRatio) + 'px';
+c2d.canvas.style.width = (W / devicePixelRatio) + 'px';
+c2d.canvas.style.height = (H / devicePixelRatio) + 'px';
+
+for (let i = 0; i < W; i++) {
+   const x0 = i;
+   const x1 = i + 1;
+   let val = (i % 2) ? 0 : 1;
+   val = Math.round(val * 255);
+
+   gl.scissor(x0, 0, x1, H);
+   gl.clearColor(val / 255, val / 255, val / 255, 1);
+   gl.clear(gl.COLOR_BUFFER_BIT);
+
+   c2d.fillStyle = `rgb(${val}, ${val}, ${val})`;
+   c2d.fillRect(x0, 0, x1, H);
+}
+
+const val = 0x80;
+gl.scissor(0, H/3, W, H/3);
+gl.clearColor(val / 255, val / 255, val / 255, 1);
+gl.clear(gl.COLOR_BUFFER_BIT);
+
+c2d.fillStyle = `rgb(${val}, ${val}, ${val})`;
+c2d.fillRect(0, H/3, W, H/3);
+
+</script>
+</body>
+</html>
