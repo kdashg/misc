@@ -1,11 +1,78 @@
 # Misc Notes
 
-## Debugging gecko
+## `gdb` Auto-Attach to All Child Processes
 
-### Auto attach to process
+### `.gdbinit`
 
-Entrian Attach causes at least the following assert to be hit:
-    MOZ_ASSERT(aPid == base::GetProcId(mChildProcessHandle));
+```
+set detach-on-fork off
+set print inferior-events on
+set schedule-multiple on
+set non-stop on
+set target-async on
+
+set pagination off
+set auto-solib-add off
+
+handle SIGSYS noprint nostop pass
+```
+
+This is enough to have gdb attach to all forks and continue.
+I also disable eager symbol loading via `auto-solib-add` because it's very slow for Gecko.
+Gecko also generates a lot of SIGSYS that it expects to be able to handle, but by default gdb intercepts these and panics.
+
+### Example usage
+
+```
+Assertion failure: !isSome(), at /home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/include/mozilla/Maybe.h:863
+#01: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x944c842]
+#02: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0xd98ed48]
+#03: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0xd12af62]
+#04: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0xd12a5d6]
+#05: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0xd04746b]
+#06: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0xd88fcf7]
+#07: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x131ad145]
+#08: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x131999c0]
+#09: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x1319a17f]
+#10: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x13199f42]
+#11: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x1318d568]
+#12: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x131823bd]
+#13: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x13199b8a]
+#14: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x1319a17f]
+#15: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x13199f42]
+#16: ???[/home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so +0x13f849cd]
+#17: ??? (???:???)
+Reading symbols from /home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/firefox...
+[Child 64335, Main Thread] WARNING: NS_ENSURE_TRUE(mRequest) failed: file /home/jgilbert/dev/mozilla/gecko1/netwerk/base/nsBaseChannel.cpp:928
+Reading symbols from /usr/lib/debug/.build-id/4f/c5fc33f4429136a494c640b113d76f610e4abc.debug...
+
+Thread 9.1 "Web Content" received signal SIGSEGV, Segmentation fault.
+0x00007fffe4908852 in ?? () from /home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so
+```
+
+This tells us that Thread 9.1 ($inferior.$thread) crashed, so switch to it:
+
+```
+(gdb) thread 9.1
+[Switching to thread 9.1 (Thread 0x7ffff78e5780 (LWP 64392))]
+#0  0x00007fffe4908852 in ?? () from /home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libxul.so
+```
+
+Voila!
+
+```
+(gdb) bt 5
+#0  0x00007fffe4908852 in mozilla::Maybe<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >::emplace<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&) (this=Reading symbols from /home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libsoftokn3.so...
+Reading symbols from /home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libfreeblpriv3.so...
+Reading symbols from /home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libmozavutil.so...
+Reading symbols from /home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/bin/libmozavcodec.so...
+0x7fffffff4ea8, aArgs=...) at /home/jgilbert/dev/mozilla/gecko1/obj-x86_64-pc-linux-gnu/dist/include/mozilla/Maybe.h:863
+#1  0x00007fffe8e4ad48 in mozilla::ClientWebGLContext::TexImage(unsigned char, unsigned int, int, unsigned int, mozilla::avec3<int> const&, mozilla::avec3<int> const&, int, mozilla::webgl::PackingInfo const&, mozilla::TexImageSource const&) const (this=0x7fffdab7e880, funcDims=2 '\002', imageTarget=3553, level=0, respecFormat=36975, offset=..., isize=..., border=0, pi=..., src=...) at /home/jgilbert/dev/mozilla/gecko1/dom/canvas/ClientWebGLContext.cpp:4050
+#2  0x00007fffe85e6f62 in mozilla::ClientWebGLContext::TexImage2D<mozilla::dom::HTMLVideoElement>(unsigned int, int, unsigned int, int, int, int, unsigned int, unsigned int, mozilla::dom::HTMLVideoElement const&, mozilla::ErrorResult&) const (this=0x7fffdab7e880, target=3553, level=0, internalFormat=36975, width=0, height=0, border=0, unpackFormat=36249, unpackType=33640, anySrc=..., out_error=...) at /home/jgilbert/dev/mozilla/gecko1/dom/canvas/ClientWebGLContext.h:1514
+#3  0x00007fffe85e65d6 in mozilla::ClientWebGLContext::TexImage2D<mozilla::dom::HTMLVideoElement>(unsigned int, int, unsigned int, unsigned int, unsigned int, mozilla::dom::HTMLVideoElement const&, mozilla::ErrorResult&) const (this=0x7fffdab7e880, target=3553, level=0, internalFormat=36975, unpackFormat=36249, unpackType=33640, anySrc=..., out_error=...) at /home/jgilbert/dev/mozilla/gecko1/dom/canvas/ClientWebGLContext.h:1718
+#4  0x00007fffe850346b in mozilla::dom::WebGL2RenderingContext_Binding::texImage2D(JSContext*, JS::Handle<JSObject*>, void*, JSJitMethodCallArgs const&) (cx_=0x7fffd922f000, obj=..., void_self=0x7fffdab7e880, args=...) at WebGL2RenderingContextBinding.cpp:2100
+(More stack frames follow...)
+```
 
 ## depot_tools
 
