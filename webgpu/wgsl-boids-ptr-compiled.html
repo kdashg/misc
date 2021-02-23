@@ -3,11 +3,13 @@
 <meta charset='utf-8'>
 </head>
 <body>
-<pre id='e_pos_a'></pre>
-<pre id='e_a'></pre>
-<pre id='e_pos_b'></pre>
-<pre id='e_b'></pre>
-<script>
+  <div id='e_cont'>
+    <pre id='e_pos_a'></pre>
+    <pre id='e_a'></pre>
+    <pre id='e_pos_b'></pre>
+    <pre id='e_b'></pre>
+  </div>
+  <script>
 
 const src_a =
 `[[block]] struct Particle {
@@ -32,14 +34,20 @@ const src_a =
 [[builtin(global_invocation_id)]] var<in> GlobalInvocationID : vec3<u32>;
 // https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/dat
 // a/shaders/computeparticles/particle.comp
+
+
 [[stage(compute)]]
 fn main() -> void {
   var index : u32 = GlobalInvocationID.x;
   if (index >= \${numParticles}) {
     return;
   }
+
   var vPos : vec2<f32> = particlesA.particles[index].pos;
+
   var vVel : vec2<f32> = particlesA.particles[index].vel;
+
+
   var cMass : vec2<f32> = vec2<f32>(0.0, 0.0);
   var cVel : vec2<f32> = vec2<f32>(0.0, 0.0);
   var colVel : vec2<f32> = vec2<f32>(0.0, 0.0);
@@ -47,10 +55,15 @@ fn main() -> void {
   var cVelCount : u32 = 0u;
   var pos : vec2<f32>;
   var vel : vec2<f32>;
+
   for (var i : u32 = 0u; i < \${numParticles}u; i = i + 1u) {
+
+
+
     if (i == index) {
       continue;
     }
+
     pos = particlesA.particles[i].pos.xy;
     vel = particlesA.particles[i].vel.xy;
     if (distance(pos, vPos) < params.rule1Distance) {
@@ -64,18 +77,23 @@ fn main() -> void {
       cVel = cVel + vel;
       cVelCount = cVelCount + 1u;
     }
+
+
   }
+
+
+
   if (cMassCount > 0u) {
     var temp : f32 = f32(cMassCount);
     cMass = (cMass / vec2<f32>(temp, temp)) - vPos;
-    // cMass =
-    //  (cMass / vec2<f32>(f32(cMassCount), f32(cMassCount))) - vPos;
   }
+
   if (cVelCount > 0u) {
     var temp : f32 = f32(cVelCount);
     cVel = cVel / vec2<f32>(temp, temp);
-    // cVel = cVel / vec2<f32>(f32(cVelCount), f32(cVelCount));
   }
+
+
   vVel = vVel + (cMass * params.rule1Scale) +
                 (colVel * params.rule2Scale) +
                 (cVel * params.rule3Scale);
@@ -84,12 +102,14 @@ fn main() -> void {
   // kinematic update
   vPos = vPos + (vVel * params.deltaT);
   // Wrap around boundary
+
   if (vPos.x < -1.0) {
     vPos.x = 1.0;
   }
   if (vPos.x > 1.0) {
     vPos.x = -1.0;
   }
+
   if (vPos.y < -1.0) {
     vPos.y = 1.0;
   }
@@ -125,9 +145,11 @@ const src_b =
 [[builtin(global_invocation_id)]] var<in> GlobalInvocationID : vec3<u32>;
 // https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/dat
 // a/shaders/computeparticles/particle.comp
+
+
 [[stage(compute)]]
 fn main() -> void {
-  const index = GlobalInvocationID.x;
+  const index = *&GlobalInvocationID.x;
   if (index >= \${numParticles}) {
     return;
   }
@@ -136,16 +158,23 @@ fn main() -> void {
   const vPos$0 : vec2<f32> = *p_vPos;
   const p_vVel : ptr<vec2<f32>> = p_particlesA_particles.vel;
   const vVel$0 : vec2<f32> = *p_vVel;
+
   var cMass : vec2<f32> = vec2<f32>(0.0, 0.0);
   var cVel : vec2<f32> = vec2<f32>(0.0, 0.0);
   var colVel : vec2<f32> = vec2<f32>(0.0, 0.0);
   var cMassCount : u32 = 0u;
   var cVelCount : u32 = 0u;
-  for (var i : u32 = 0u; *&i < \${numParticles}u; *&i = *&i + 1u) {
-    if (*&i == index) {
+
+
+  var i : u32 = 0u
+  loop (; *&i < \${numParticles}u; *&i = *&i + 1u) {
+    const i$0 = *&i;
+    if (!(i$0 < \${numParticles}u)) break;
+
+    if (i$0 == index) {
       continue;
     }
-    const p_particlesA_particles_i = p_particlesA_particles[i];
+    const p_particlesA_particles_i = p_particlesA_particles[i$0];
     const pos = *p_particlesA_particles_i.pos;
     const vel = *p_particlesA_particles_i.vel;
     if (distance(pos, vPos$0) < *&params.rule1Distance) {
@@ -159,7 +188,11 @@ fn main() -> void {
       *&cVel = *&cVel + vel;
       *&cVelCount = *&cVelCount + 1u;
     }
+
+    *&i = i$0 + 1u;
   }
+
+
   const cMassCount$0 = *cMassCount;
   if (cMassCount$0 > 0u) {
     const temp : f32 = f32(cMassCount$0);
@@ -168,10 +201,10 @@ fn main() -> void {
   const cVelCount$0 = *&cVelCount;
   if (cVelCount$0 > 0u) {
     const temp : f32 = f32(cVelCount$0);
-    // Does the compiler optimize to omit the load/store here in favor
-    // of an intermediate here? This could be \`const temp\` instead.
     *&cVel = *&cVel / vec2<f32>(temp, temp);
   }
+
+
   const vVel$1 = vVel$0 + (*&cMass * *&params.rule1Scale) +
                           (*&colVel * *&params.rule2Scale) +
                           (*&cVel * *&params.rule3Scale);
@@ -195,6 +228,8 @@ fn main() -> void {
     *p_vPos_y = -1.0;
   }
   // Write back
+
+
   return;
 }
 `;
@@ -210,18 +245,20 @@ function count_lines(s) {
 const line_count = Math.max(count_lines(src_a), count_lines(src_b));
 const line_num_vals = [];
 for (let i = 0; i < line_count; i++) {
-  line_num_vals.push(1+i);
+  line_num_vals.push(' ' + (1+i) + ' ');
 }
 const line_num_str = line_num_vals.join('\n');
 
 // -
-document.body.style.display = 'grid';
-document.body.style.height = '100vh';
-document.body.style.gridTemplateColumns = '2em 1fr 2em 1fr';
+
+const cont = e_cont;
+cont.style.height = '100vh';
+cont.style.display = 'grid';
+cont.style.gridTemplateColumns = 'repeat(4,min-content)';
 
 e_pos_a.textContent = e_pos_b.textContent = line_num_str;
 e_a.textContent = src_a;
 e_b.textContent = src_b;
-</script>
+  </script>
 </body>
 </html>
