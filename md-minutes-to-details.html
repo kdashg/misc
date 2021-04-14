@@ -1,0 +1,214 @@
+<doctype html>
+<html>
+   <head>
+      <meta charset='utf-8'>
+   </head>
+   <body>
+      Markdown:
+      <br>
+      <textarea id='e_in' style='width: 100%; height: 50vh;'>
+&lt;!-- Output copied to clipboard! --&gt;
+
+
+# **WGSL 2021-00-00 Minutes**
+
+## H2
+
+### Example 1
+
+* lorem
+
+
+### [Example 2](example.com)
+
+* ipsum
+
+
+## H2 again
+</textarea>
+      <hr>
+      Minute details: <button id='e_extract'>Extract</button>
+      <div id='e_out'></div>
+      <script>
+'use strict';
+
+function count_char_repeats(str, c) {
+   let i = 0;
+   while (str[i] == c) {
+      i += 1;
+   }
+   return i;
+}
+{
+   if (count_char_repeats('### hi', '#') != 3) throw 3;
+}
+
+function MdSection(title) {
+   this.title = title;
+   this.h_level = count_char_repeats(title || '', '#');
+   this.children = [];
+}
+
+function md_to_tree(text) {
+   const lines = text.split('\n');
+   const root = new MdSection(null);
+   let h_stack = [root];
+   while (lines.length) {
+      const line = lines.shift();
+      const h_level = count_char_repeats(line, '#');
+      if (!h_level) {
+         const parent = h_stack[h_stack.length-1];
+         parent.children.push(line);
+         continue;
+      }
+      h_stack = h_stack.slice(0, h_level);
+      const parent = h_stack[h_stack.length-1];
+      const sec = new MdSection(line);
+      parent.children.push(sec);
+      h_stack.push(sec);
+   }
+   return root;
+}
+
+function* range(n) {
+   for (let i = 0; i < n; i++) {
+      yield i;
+   }
+}
+
+const RE_H1_TITLE = /# \*\*WGSL (\d\d\d\d-\d\d-\d\d) Minutes\*\*/;
+function get_date(h1_title) {
+   const match = h1_title.match(RE_H1_TITLE);
+   if (!match) throw 'h1_title.match(RE_TITLE) failed';
+   const date = match[1];
+   return date;
+}
+if (get_date('# **WGSL 2021-04-13 Minutes**') != '2021-04-13') throw 'get_date';
+
+function to_github_anchor_slug(text) {
+   let parts = text.split(/ +/);
+   parts = parts.map(s => {
+      s = s.toLowerCase();
+      s = [].filter.call(s, c => {
+         if (c.match(/[0-9A-Za-z-_]/)) return c;
+         return '';
+      }).join('');
+      return s;
+   });
+   return parts.join('-');
+}
+
+{
+   const title = '[wgsl] Proposal: Remove pointer out parameters from modf, frexp · Issue #1480 · gpuweb/gpuweb';
+   const expected = 'wgsl-proposal-remove-pointer-out-parameters-from-modf-frexp--issue-1480--gpuwebgpuweb';
+   const was = to_github_anchor_slug(title);
+   if (was != expected) throw was;
+}
+
+const RE_H3_TITLE_URL = /### \[(.*)\]\((.*)\)/;
+function extract_from_title(h3_title) {
+}
+
+function section_desc(h3_section) {
+   const h3_title = h3_section.title;
+   const m = h3_title.match(RE_H3_TITLE_URL);
+   if (!m) {
+      const section_title = h3_title.slice('### '.length);
+      return {
+         slug: to_github_anchor_slug(section_title),
+         text: h3_section.children.join('\n'),
+      };
+   }
+   const section_title = m[1];
+
+   return {
+      issue_url: m[2],
+      slug: to_github_anchor_slug(section_title),
+      text: h3_section.children.join('\n'),
+   };
+}
+
+{
+   const text = `\
+
+
+*   DM: Do we want to spend innovation budget on anonymous structs here?
+*   BC: Previously there were concerns about having to have a named struct to return here, but now with type inference, we could return anonymous structs here. Not necessarily proposing userland anonymous structs, and if we decided to name them in the future, we could name them.
+*   DM: Some complexity, new types for these builtins.`;
+   const h3_section = {
+      title: '### [[wgsl] Proposal: Remove pointer out parameters from modf, frexp · Issue #1480 · gpuweb/gpuweb](https://github.com/gpuweb/gpuweb/issues/1480)',
+      h_level: 3,
+      children: text.split('\n'),
+   };
+   const expected = {
+      issue_url: 'https://github.com/gpuweb/gpuweb/issues/1480',
+      slug: 'wgsl-proposal-remove-pointer-out-parameters-from-modf-frexp--issue-1480--gpuwebgpuweb',
+      text: text,
+   };
+   const was = section_desc(h3_section);
+   if (JSON.stringify(expected) != JSON.stringify(was)) throw was;
+}
+
+function make_details(date, wiki_url, desc) {
+   return `\
+<details><summary><a href="${wiki_url}#${desc.slug}">WGSL meeting minutes ${date}</a></summary>
+${desc.text}
+</details>`;
+}
+
+function extract_minutes() {
+   const text = e_in.value;
+   const tree = md_to_tree(text);
+
+   const h1 = (() => {
+      for (const x of tree.children) {
+         if (x.title) return x;
+      }
+      throw tree.children;
+   })();
+   console.log('tree', tree);
+   const date = get_date(h1.title);
+   date.defined;
+
+   const wiki_url = `https://github.com/gpuweb/gpuweb/wiki/WGSL-${date}-Minutes`;
+
+   while (e_out.firstChild) {
+      e_out.removeChild(e_out.firstChild);
+   }
+
+   function f(cur) {
+      if (cur.title === undefined) return; //string
+      if (cur.h_level != 3) {
+         for (const child of cur.children) {
+            f(child);
+         }
+         return;
+      }
+      const desc = section_desc(cur);
+      //console.log(desc);
+
+      const details = make_details(date, wiki_url, desc);
+      e_out.appendChild(document.createElement('br'));
+      const out = e_out.appendChild(document.createElement('div'));
+
+      let e_section_title;
+      if (desc.issue_url) {
+         e_section_title = out.appendChild(document.createElement('a'));
+         e_section_title.href = desc.issue_url;
+      } else {
+         e_section_title = out.appendChild(document.createElement('span'));
+      }
+      e_section_title.textContent = cur.title;
+
+      out.appendChild(document.createElement('br'));
+      const e_details = out.appendChild(document.createElement('pre'));
+      e_details.style.border = '1px solid black';
+      e_details.textContent = details;
+   }
+   f(tree);
+}
+
+e_extract.addEventListener('click', extract_minutes, false);
+      </script>
+   </body>
+</html>
