@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <meta charset='utf-8'>
+   </head>
+   <body>
+      <br>Width: <input id='e_width' type='text' value='1920'>
+      <br>Height: <input id='e_height' type='text' value='1080'>
+      <br>Text: <input id='e_with_text' type='checkbox'>
+      <br><canvas id='e_canvas'></canvas>
+      <script>
+'use strict';
+
+const c2d = e_canvas.getContext('2d');
+
+function draw() {
+   const W = parseInt(e_width.value);
+   const H = parseInt(e_height.value);
+   const S = 0.9;
+   const TEXT = e_with_text.checked;
+
+   c2d.canvas.width = W;
+   c2d.canvas.height = H;
+   const vw = 100 * S;
+   const vh = vw / W * H;
+   c2d.canvas.style.width = vw + 'vw';
+   c2d.canvas.style.height = vh + 'vw';
+
+   c2d.font = 'bold 50px sans-serif';
+
+   c2d.fillStyle = 'rgb(0,0,0)';
+   c2d.fillRect(0, 0, W/2, H/2);
+
+   c2d.fillStyle = 'rgb(16,16,16)';
+   c2d.fillRect(W/2, 0, W/2, H/2);
+
+   c2d.fillStyle = 'rgb(235,235,235)';
+   c2d.fillRect(0, H/2, W/2, H/2);
+
+   c2d.fillStyle = 'rgb(255,255,255)';
+   c2d.fillRect(W/2, H/2, W/2, H/2);
+
+   if (TEXT) {
+      c2d.fillStyle = 'rgb(255,0,0)';
+      c2d.fillText('0', W*1/4, H*1/4);
+      c2d.fillText('16', W*3/4, H*1/4);
+      c2d.fillText('235', W*1/4, H*3/4);
+      c2d.fillText('255', W*3/4, H*3/4);
+   }
+
+   c2d.fillStyle = 'rgb(127,0,0)';
+   c2d.fillRect(W/2-W/10, H/2-H/10, W/10, H/10);
+   c2d.fillStyle = 'rgb(0,127,0)';
+   c2d.fillRect(W/2, H/2-H/10, W/10, H/10);
+   c2d.fillStyle = 'rgb(0,0,127)';
+   c2d.fillRect(W/2-W/10, H/2, W/10, H/10);
+   c2d.fillStyle = 'rgb(127,127,127)';
+   c2d.fillRect(W/2, H/2, W/10, H/10);
+
+   if (TEXT) {
+      c2d.fillStyle = 'rgb(255,0,0)';
+      c2d.fillText('127', W/2, H/2);
+   }
+}
+draw();
+
+[e_width, e_height, e_with_text].forEach(x => {
+   x.addEventListener('change', draw);
+});
+      </script>
+  </body>
+</html>

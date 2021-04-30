@@ -88,7 +88,8 @@ function getRangeInfo() {
 // -
 
 // Make these easy to use in console:
-let yuvFromRgb, ycbcrFromYuv;
+let yuvFromRgb, rgbFromYuv;
+let ycbcrFromYuv;
 let ycbcrFromRgb, rgbFromYcbcr;
 
 function refreshQuant() {
@@ -210,7 +211,12 @@ function refreshColorSpace() {
                    [-kr/uRange, -kg/uRange, (1-kb)/uRange],
                    [(1-kr)/vRange, -kg/vRange, -kb/vRange] ];
 
-    e_color_space_output.textContent = matToOutputVar('yuvFromRgb', yuvFromRgb);
+    rgbFromYuv = matInv(yuvFromRgb);
+    e_color_space_output.textContent = [
+        matToOutputVar('yuvFromRgb', yuvFromRgb),
+        '',
+        matToOutputVar('rgbFromYuv', rgbFromYuv),
+    ].join('\n');
 
     refreshRangeInfo();
 }
