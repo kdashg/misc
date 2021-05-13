@@ -74,14 +74,14 @@ function getRangeInfo() {
     const bits = parseInt(e_bits.value);
     const normalizer = (1 << bits) - 1;
 
-    const cbcr_1 = parseFloat(e_uvq_min.value);
-    const cbcr1 = parseFloat(e_uvq_max.value);
-    const cbcr0 = (cbcr_1 + cbcr1) / 2;
+    const cbcr_neg_1 = parseFloat(e_uvq_min.value);
+    const cbcr_pos_1 = parseFloat(e_uvq_max.value);
+    const cbcr0 = (cbcr_neg_1 + cbcr_pos_1) / 2;
     return {
         y0: parseFloat(e_yq_min.value) / normalizer,
         y1: parseFloat(e_yq_max.value) / normalizer,
         cbcr0: cbcr0 / normalizer,
-        cbcr1: cbcr1 / normalizer,
+        cbcr1: cbcr_pos_1 / normalizer,
     };
 }
 
@@ -164,16 +164,18 @@ function refreshRangeInfo() {
         // Y: D = Round((2^n-1) * E) | E = [0.0, 1.0]
         // AKA Dy = 255*Ey + 0
         // Cb,Cr: D = Round((2^n-1) * E + 2^(n-1)) | E = [-0.5, 0.5]
-        // AKA Dcb,Dcr = 255*Ey + 128, or 128 +/- 127.5
+        // AKA Dcb,Dcr = 255*Ey + 128, or 128 +/- 127.5. (512 +/- 511.5)
+        // Next, it then specifies peak/achrome/peak as 1/512/1023,
+        // but by its formulas, +0.5 => round(1023*0.5+512) = round(512+511.5)
+        // = round(1023.5) = *1024*. Uhh, oops!
+
+        // It seems to me what they wanted instead was 512 +/- 511, or:
+        // Cb,Cr: D = Round((2^n-2) * E + 2^(n-1))
+
         e_yq_min.value = 0;
         e_yq_max.value = normalizer;
-        e_uvq_min.value = 0.5; // [1]
-        e_uvq_max.value = normalizer + 0.5; // [1]
-
-        // [1]: What's with the 0.5 offsets? The spec defines e.g. `128 +/- 127.5`.
-        // We may never know why they didn't pick the much cleaner `128 +/- 127`:
-        // Cb,Cr: D = Round(2^n * E + 2^(n-1))
-        // Alas!
+        e_uvq_min.value = 1;
+        e_uvq_max.value = normalizer;
     } else {
         let y0 = 16;
         let y1 = 235; // 16+219
