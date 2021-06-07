@@ -271,7 +271,7 @@ function convert(srcElems, destFromSrc, destElems) {
 
     for (let i = 0; i < 3; i++) {
         let val = dest[i];
-        val = Math.max(0, Math.min(val, 1)); // clamp to [0,1]
+        //val = Math.max(0, Math.min(val, 1)); // clamp to [0,1]
         destElems[i].value = round(val*normalizer);
     }
 }
