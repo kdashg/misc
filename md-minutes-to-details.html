@@ -10,7 +10,7 @@
 &lt;!-- Output copied to clipboard! --&gt;
 
 
-# **WGSL 2021-00-00 Minutes**
+# WGSL 2021-00-00 Minutes
 
 ## H2
 
@@ -47,25 +47,39 @@ function MdSection(title) {
    this.title = title;
    this.h_level = count_char_repeats(title || '', '#');
    this.children = [];
+
+   this.add_child = child => {
+      child.parent = this;
+      this.children.push(child);
+   };
 }
 
 function md_to_tree(text) {
    const lines = text.split('\n');
    const root = new MdSection(null);
-   let h_stack = [root];
+   let cur_sec = root;
    while (lines.length) {
       const line = lines.shift();
       const h_level = count_char_repeats(line, '#');
       if (!h_level) {
-         const parent = h_stack[h_stack.length-1];
-         parent.children.push(line);
+         cur_sec.children.push(line);
          continue;
       }
-      h_stack = h_stack.slice(0, h_level);
-      const parent = h_stack[h_stack.length-1];
-      const sec = new MdSection(line);
-      parent.children.push(sec);
-      h_stack.push(sec);
+      const new_sec = new MdSection(line);
+
+      const parent_h_level = new_sec.h_level - 1;
+      while (cur_sec.h_level > parent_h_level) {
+         cur_sec = cur_sec.parent;
+      }
+      while (cur_sec.h_level < parent_h_level) {
+         const dummy = new MdSection('#'.repeat(cur_sec.h_level + 1));
+         dummy.title = undefined;
+         cur_sec.add_child(dummy);
+         cur_sec = dummy;
+      }
+
+      cur_sec.add_child(new_sec);
+      cur_sec = new_sec;
    }
    return root;
 }
@@ -76,14 +90,14 @@ function* range(n) {
    }
 }
 
-const RE_H1_TITLE = /# \*\*WGSL (\d\d\d\d-\d\d-\d\d) Minutes\*\*/;
+const RE_H1_TITLE = /# WGSL (\d\d\d\d-\d\d-\d\d) Minutes/;
 function get_date(h1_title) {
    const match = h1_title.match(RE_H1_TITLE);
    if (!match) throw 'h1_title.match(RE_TITLE) failed';
    const date = match[1];
    return date;
 }
-if (get_date('# **WGSL 2021-04-13 Minutes**') != '2021-04-13') throw 'get_date';
+if (get_date('# WGSL 2021-04-13 Minutes') != '2021-04-13') throw 'get_date';
 
 function to_github_anchor_slug(text) {
    let parts = text.split(/ +/);
@@ -106,8 +120,6 @@ function to_github_anchor_slug(text) {
 }
 
 const RE_H3_TITLE_URL = /### \[(.*)\]\((.*)\)/;
-function extract_from_title(h3_title) {
-}
 
 function section_desc(h3_section) {
    const h3_title = h3_section.title;
@@ -177,7 +189,7 @@ function extract_minutes() {
    }
 
    function f(cur) {
-      if (cur.title === undefined) return; //string
+      if (cur.h_level === undefined) return; // A string, not a section.
       if (cur.h_level != 3) {
          for (const child of cur.children) {
             f(child);
