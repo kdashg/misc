@@ -4,162 +4,127 @@
     <meta charset='utf-8'>
   </head>
   <body>
-    <script id='vs' type='none'>
+    <script>
 
-attribute vec3 aPosition;
+function make_program(gl, vs_src, fs_src) {
+  function attach_shader_source(prog, type, src) {
+    const shader = gl.createShader(gl[type]);
+    gl.shaderSource(shader, src.trim());
+    gl.compileShader(shader);
+    gl.attachShader(prog, shader);
+    gl.deleteShader(shader);
+  };
 
-void main(void) {
-  gl_PointSize = 50.0;
-  gl_Position = vec4(aPosition, 1.0);
-}
-
-    </script>
-    <script id='fs' type='none'>
-
-precision mediump float;
-
-uniform vec4 uColor;
-
-void main(void) {
-  gl_FragColor = uColor;
-}
-
-    </script>
-    <script type='text/javascript'>
-
-function ProgramByElemIds(gl, vsElem, fsElem) {
-  var vs = gl.createShader(gl.VERTEX_SHADER);
-  gl.shaderSource(vs, vsElem.innerHTML.trim());
-  gl.compileShader(vs);
-
-  var fs = gl.createShader(gl.FRAGMENT_SHADER);
-  gl.shaderSource(fs, fsElem.innerHTML.trim());
-  gl.compileShader(fs);
-
-  var prog = gl.createProgram();
-  gl.attachShader(prog, vs);
-  gl.attachShader(prog, fs);
-  gl.deleteShader(vs);
-  gl.deleteShader(fs);
-
+  const prog = gl.createProgram();
+  attach_shader_source(prog, 'VERTEX_SHADER', vs_src);
+  attach_shader_source(prog, 'FRAGMENT_SHADER', fs_src);
   gl.linkProgram(prog);
 
-  var success = gl.getProgramParameter(prog, gl.LINK_STATUS);
-  if (success)
-      return prog;
-
-  console.log('Error linking program');
-  console.log('\nLink log: ' + gl.getProgramInfoLog(prog));
-  console.log('\nVert shader log: ' + gl.getShaderInfoLog(vs));
-  console.log('\nFrag shader log: ' + gl.getShaderInfoLog(fs));
-  console.log('\nvs source: \n' + gl.getShaderSource(vs));
-  return null;
-}
-
-function ASSERT(cond, text) {
-  if (!cond) {
-    text = 'Assertion hit: ' + text;
-    throw new Error(text);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    throw 'Program linking failed';
   }
+  return prog;
 }
 
 // -
 
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
-canvas.width = 300;
-canvas.height = 300;
+canvas.width = canvas.height = 300;
+
+// -
 
 document.body.appendChild(document.createElement('br'));
 
 const log_div = document.createElement('div');
 document.body.appendChild(log_div);
 
-function Log(t) {
+function log(t) {
   console.log(t);
   log_div.innerText += t + '\n';
 }
 
+// -
+
 canvas.addEventListener('webglcontextlost', function(e) {
-  Log(`[${performance.now() / 1000.0}] webglcontextlost`);
-  e.preventDefault();
+  log(`[${performance.now() / 1000.0}] webglcontextlost`);
+  e.preventDefault(); // Ask for restore
 }, false);
 
 canvas.addEventListener('webglcontextrestored', function() {
-  Log(`[${performance.now() / 1000.0}] webglcontextrestored`);
-  Init();
+  log(`[${performance.now() / 1000.0}] webglcontextrestored`);
+  begin();
 }, false);
 
-// -
-
-const attribs = {
-  alpha: true,
-  premultipliedAlpha: false,
-  antialias: true,
-  depth: true,
-  stencil: false,
-  preserveDrawingBuffer: true,
+const ATTRIBS = {
+  //alpha: true,
+  //premultipliedAlpha: false,
+  //antialias: true,
+  //depth: true,
+  //stencil: false,
+  //preserveDrawingBuffer: true,
 };
-const gl = canvas.getContext('webgl', attribs);
-ASSERT(gl);
+const gl = canvas.getContext('webgl', ATTRIBS);
+if (!gl) throw '!gl';
 
 // -
 
 let prog;
 
-function Init() {
+function begin() {
   gl.enable(gl.DEPTH_TEST);
 
-  prog = ProgramByElemIds(gl, vs, fs);
-  ASSERT(prog, 'Basic program links.');
+  const VS_SRC = `\
+    attribute vec3 a_pos;
 
-  prog.aPosition = gl.getAttribLocation(prog, 'aPosition');
-  prog.uColor = gl.getUniformLocation(prog, 'uColor');
+    void main(void) {
+      gl_PointSize = 50.0;
+      gl_Position = vec4(a_pos, 1.0);
+    }`;
+  const FS_SRC = `\
+    precision mediump float;
 
+    uniform vec4 u_color;
+
+    void main(void) {
+      gl_FragColor = u_color;
+    }`
+  prog = make_program(gl, VS_SRC, FS_SRC);
+  prog.a_pos = gl.getAttribLocation(prog, 'a_pos');
+  prog.u_color = gl.getUniformLocation(prog, 'u_color');
   gl.useProgram(prog);
 
-  error = gl.getError();
-  ASSERT(error == 0, 'Should be no errors: 0x' + error.toString(16));
-
-  Frame();
+  frame();
 }
 
-function Frame() {
-  var a = 3 * performance.now() / 1000;
-
-  var x = 0.7 * Math.cos(a);
-  var y = 0.7 * Math.sin(a);
-
-  var error = gl.getError();
-  if (gl.isContextLost())
-    return;
-  ASSERT(error == 0, 'Should be no errors: 0x' + error.toString(16));
+function frame() {
+  const a = 3 * performance.now() / 1000;
+  const x = 0.7 * Math.cos(a);
+  const y = 0.7 * Math.sin(a);
 
   gl.clearColor(0.3, 0.3, 0.3, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  gl.vertexAttrib3f(prog.aPosition, 0.7, 0.0, +0.1);
-  gl.uniform4f(prog.uColor, 1.0, 0.0, 0.0, 0.5);
+  gl.vertexAttrib3f(prog.a_pos, 0.7, 0.0, +0.1);
+  gl.uniform4f(prog.u_color, 1.0, 0.0, 0.0, 1.0);
   gl.drawArrays(gl.POINTS, 0, 1);
 
-  gl.vertexAttrib3f(prog.aPosition, 0.0, 0.7, -0.1);
-  gl.uniform4f(prog.uColor, 0.0, 1.0, 0.0, 0.5);
+  gl.vertexAttrib3f(prog.a_pos, 0.0, 0.7, -0.1);
+  gl.uniform4f(prog.u_color, 0.0, 1.0, 0.0, 1.0);
   gl.drawArrays(gl.POINTS, 0, 1);
 
-  gl.vertexAttrib3f(prog.aPosition, x, y, 0.0);
-  gl.uniform4f(prog.uColor, 1.0, 0.0, 1.0, 1.0);
+  gl.vertexAttrib3f(prog.a_pos, x, y, 0.0);
+  gl.uniform4f(prog.u_color, 0.0, 0.0, 1.0, 1.0);
   gl.drawArrays(gl.POINTS, 0, 1);
 
+  if (gl.isContextLost()) return;
+  const error = gl.getError();
+  if (error) throw `Unexpected error: 0x${error.toString(16)}`;
 
-  error = gl.getError();
-  if (gl.isContextLost())
-    return;
-  ASSERT(error == 0, 'Should be no errors: 0x' + error.toString(16));
-
-  requestAnimationFrame(Frame);
+  requestAnimationFrame(frame);
 }
 
-Init();
+begin();
 
     </script>
   </body>
