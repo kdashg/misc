@@ -111,8 +111,33 @@ In this shell, git-cl/gclient/gn/ninja/etc should Just Work.
 You basically need Git Bash, even if you choose not to use that shell.
 With another shell, you'll need to use `GIT_SSH_COMMAND=/bin/ssh git` in order to get ssh-agent to work.
 
-You can hook python up to Git Bash, but it breaks everything (failing to TTY detect?) when starting the repl.
+In my profile file, I conditionally run this for mozilla-build-only like so:
+```bash
+if [ -n $MOZILLABUILD ]
+then
+  echo "Using mozilla-build's ssh for git"
+  export GIT_SSH_COMMAND=/bin/ssh
+fi
+```
+
+You can also try to hook python up to Git Bash, but it breaks everything (failing to TTY detect?) when starting the repl.
 It works fine if you start it as `python -i` though.
+
+## My full `.bash_profile`
+```bash
+cd /c/dev
+export VISUAL=vim
+if [ -n $MOZILLABUILD ]
+then
+  echo "Using mozilla-build's ssh for git"
+  export GIT_SSH_COMMAND=/bin/ssh
+fi
+
+export PATH="$PATH:/c/Program Files/nodejs"
+
+eval `ssh-agent`
+ssh-add ~/.ssh/jdashg-4096.priv
+```
 
 ## `apitrace`
 
