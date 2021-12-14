@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset=utf-8>
+  </head>
+  <body>
+    <br>Width (default 1000): <input id=e_w type=text>
+    <br>Height (default 1000): <input id=e_h type=text>
+    <br>Points (default 100): <input id=e_points type=text>
+    <br>Reps (default 10): <input id=e_reps type=text>
+    <br><pre id=e_output></pre>
+    <script>
+
+/// `for (const i of range(3))` => 0, 1, 2
+/// `for (const i of range(1,4))` => 1, 2, 3
+/// Don't use `i in range(n)`, it will quietly not work.
+function* range(a, b) {
+  if (b === undefined) {
+  	b = a;
+    a = 0;
+  }
+  for (let i = a; i < b; i++) {
+    yield i;
+  }
+}
+
+function range2(a) {
+  let i = 0;
+  return {
+    next: () => {
+      return {
+        done: (i >= a),
+        value: i++,
+      };
+    },
+    [Symbol.iterator]: function() { return this; },
+  };
+}
+
+function range3(a) {
+  let i = 0;
+  const ret = {};
+  return {
+    next: () => {
+      ret.done = (i >= a);
+      ret.value = i++;
+      return ret;
+    },
+    [Symbol.iterator]: function() { return this; },
+  };
+}
+
+/// Prefer `call(() => { ... })` to `(() => { ... })()`\
+/// This way, it's clear up-front that we're calling not just defining.
+function call(fn) {
+    return fn();
+}
+
+function sleepPromise(ms) {
+  return new Promise(go => {
+    setTimeout(go, ms);
+  });
+}
+
+// -
+
+function bench(name, fn) {
+  const W = parseInt(e_w.value) || 1000;
+  const H = parseInt(e_h.value) || 1000;
+  const POINTS = parseInt(e_points.value) || 100;
+  const REPS = parseInt(e_reps.value) || 10;
+  const MAX_VAL_PER_POINT = 10;
+
+  const data = new Uint32Array(W * H);
+  let sum = 0;
+  for (const i of range(POINTS)) {
+    const val = (Math.random()*MAX_VAL_PER_POINT)|0;
+    const pos = (Math.random()*data.length)|0;
+    data[pos] = val;
+    sum += val;
+  }
+
+  const start = performance.now();
+  for (const i of range(REPS)) {
+    const found = fn(W, H, data);
+    console.assert(found == sum, {found}, {sum});
+  }
+  const ms = performance.now() - start;
+  const msPerRep = ms / REPS;
+  e_output.textContent += `\n${name}: ${msPerRep.toFixed(2)}ms/rep`;
+}
+
+const FLAVORS = {
+  vanilla_1d: (w, h, data) => {
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) {
+      const val = data[i];
+      if (val) {
+        sum += val;
+      }
+    }
+    return sum;
+  },
+  vanilla_2d: (w, h, data) => {
+    let sum = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const val = data[y*w+x];
+        if (val) {
+          sum += val;
+        }
+      }
+    }
+    return sum;
+  },
+  range_1d: (w, h, data) => {
+    let sum = 0;
+    for (const i of range(data.length)) {
+      const val = data[i];
+      if (val) {
+        sum += val;
+      }
+    }
+    return sum;
+  },
+  range_2d: (w, h, data) => {
+    let sum = 0;
+    for (const y of range(h)) {
+      for (const x of range(w)) {
+        const val = data[y*w+x];
+        if (val) {
+          sum += val;
+        }
+      }
+    }
+    return sum;
+  },
+  range2_1d: (w, h, data) => {
+    let sum = 0;
+    for (const i of range2(data.length)) {
+      const val = data[i];
+      if (val) {
+        sum += val;
+      }
+    }
+    return sum;
+  },
+  range2_2d: (w, h, data) => {
+    let sum = 0;
+    for (const y of range2(h)) {
+      for (const x of range2(w)) {
+        const val = data[y*w+x];
+        if (val) {
+          sum += val;
+        }
+      }
+    }
+    return sum;
+  },
+  range3_1d: (w, h, data) => {
+    let sum = 0;
+    for (const i of range3(data.length)) {
+      const val = data[i];
+      if (val) {
+        sum += val;
+      }
+    }
+    return sum;
+  },
+  range3_2d: (w, h, data) => {
+    let sum = 0;
+    for (const y of range3(h)) {
+      for (const x of range2(w)) {
+        const val = data[y*w+x];
+        if (val) {
+          sum += val;
+        }
+      }
+    }
+    return sum;
+  },
+};
+
+call(async () => {
+  for (const [name,fn] of Object.entries(FLAVORS)) {
+    bench(name, fn);
+    await sleepPromise();
+  }
+});
+
+    </script>
+  </body>
+</html>
