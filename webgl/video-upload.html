@@ -1,126 +1,110 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset='UTF-8'>
+    <meta charset=utf-8>
   </head>
   <body>
-    <script id='vs' type='none'>
-#define ORIGIN_TOP_LEFT
-attribute vec2 aCoord; // [0...1]
-uniform vec2 uOffset;
-varying vec2 vCoord; // [0...1]
-void main() {
-  gl_Position = vec4(2.0*aCoord - 1.0, 0, 1); // [-1...1]
-  gl_Position.x *= 0.7;
-  gl_Position.y *= 0.7;
-#ifdef ORIGIN_TOP_LEFT
-  gl_Position.y *= -1.0;
-#endif
-  gl_Position.x += uOffset.x;
-  gl_Position.y += uOffset.y;
+    <h2>Video upload sources</h2>
+    <ul>
+      <li><input type=button id=e_use_doggo value='Use doggo (InL7Il5.mp4)'>
+      <li><input type=button id=e_use_display value='Use display/screen'>
+      <li><input type=button id=e_enum_inputs value='Enumerate video inputs'>
+        <ul id=e_input_list>
+        </ul>
+    </ul>
+    <hr>Duplicate uploads (cruelty): <input type=text id=e_cruelty value=0>
+    <br>Score: <span id=e_score>-</span>
+    <br><canvas id=canvas width=500 height=500 style='border: solid 1px black;'></canvas>
+    <script>
 
-  vCoord = aCoord;
-}
-    </script>
-    <script id='fs' type='none'>
-precision mediump float;
-
-uniform sampler2D uTex;
-varying vec2 vCoord; // [0...1]
-
-void main(void) {
-  gl_FragColor = texture2D(uTex, vCoord);
-  //gl_FragColor = vec4(vCoord, 0, 1);//texture2D(uTex, vCoord);
-}
-    </script>
-    <canvas id='webgl' width=256 height=256></canvas>
-    <script type='text/javascript'>
-
-function GetGLSLByElemId(elemId) {
-  var elem = document.getElementById(elemId);
-  if (!elem)
-    throw 'Bad `elemId`: ' + elemId;
-
-  return elem.innerHTML.trim() + '\n';
-}
-
-function ProgramByElemIds(gl, vsId, fsId) {
-  var vs = gl.createShader(gl.VERTEX_SHADER);
-  gl.shaderSource(vs, GetGLSLByElemId(vsId));
-  gl.compileShader(vs);
-
-  var fs = gl.createShader(gl.FRAGMENT_SHADER);
-  gl.shaderSource(fs, GetGLSLByElemId(fsId));
-  gl.compileShader(fs);
-
-  var prog = gl.createProgram();
-  gl.attachShader(prog, vs);
-  gl.attachShader(prog, fs);
-  gl.deleteShader(vs);
-  gl.deleteShader(fs);
-
-  gl.linkProgram(prog);
-
-  var success = gl.getProgramParameter(prog, gl.LINK_STATUS);
-  if (success)
-      return prog;
-
-  console.log('Error linking program for \'' + vsId + '\' and \'' + fsId + '\'.');
-  console.log('\nLink log: ' + gl.getProgramInfoLog(prog));
-  console.log('\nVert shader log: ' + gl.getShaderInfoLog(vs));
-  console.log('\nFrag shader log: ' + gl.getShaderInfoLog(fs));
-  console.log('\nvs source: \n' + gl.getShaderSource(vs));
-  return null;
-}
-
-function ASSERT(cond, text) {
-  if (!cond) {
-    text = 'Assertion hit: ' + text;
-    console.log(text);
-    alert(text);
-    throw GiveMeStackTracePlease;
+/// `for (const i of range(3))` => 0, 1, 2
+/// Don't use `for...in range(n)`, it will not work.
+function* range(n) {
+  for (let i = 0; i < n; i++) {
+    yield i;
   }
 }
 
+/// Prefer `call(() => { ... })` to `(() => { ... })()`\
+/// This way, it's clear up-front that we're calling not just defining.
+function call(fn) {
+    return fn();
+}
+
+function sleepPromise(ms) {
+  return new Promise(go => {
+    setTimeout(go, ms);
+  });
+}
+
+function rafPromise() {
+  return new Promise(requestAnimationFrame);
+}
+
+/// Return first key that matches value, else undefined.
+function keyByValue(obj, val) {
+  for (const [k,v] in Object.entries(obj)) {
+    if (v == val) return k;
+  }
+  return undefined;
+}
+
+// -
+
+function makeProgram(gl, vsSrc, fsSrc) {
+  function attach(prog, type, src) {
+    const shader = gl.createShader(gl[type]);
+    gl.shaderSource(shader, src.trim());
+    gl.compileShader(shader);
+    gl.attachShader(prog, shader);
+    gl.deleteShader(shader);
+  };
+
+  const prog = gl.createProgram();
+  attach(prog, 'VERTEX_SHADER', vsSrc);
+  attach(prog, 'FRAGMENT_SHADER', fsSrc);
+  gl.linkProgram(prog);
+  return prog;
+}
+
+// -
+
 // Give ourselves a scope to return early from:
-const canvas = document.getElementById('webgl');
-const gl = canvas.getContext('experimental-webgl');
-ASSERT(gl);
+const gl = canvas.getContext('webgl2');
+gl.defined;
 
-const prog = ProgramByElemIds(gl, 'vs', 'fs');
-ASSERT(prog, 'Basic program links.');
+const prog = makeProgram(gl,
+  `\
+    #version 300 es
+    uniform float uScaleY;
+    uniform vec2 uOffset;
+    out vec2 vCoord; // [0...1]
+    void main() {
+      vCoord = vec2(gl_VertexID & 1, (gl_VertexID >> 1) & 1);
+      gl_Position = vec4(2.0*vCoord - 1.0, 0, 1); // [-1...1]
+      gl_Position.y *= uScaleY;
+      gl_Position.xy *= 0.7;
+      gl_Position.xy += uOffset;
+    }
+  `,`\
+    #version 300 es
+    precision mediump float;
 
+    uniform sampler2D uTex;
+    in vec2 vCoord; // [0...1]
+    out vec4 oColor;
+
+    void main(void) {
+      oColor = texture(uTex, vCoord);
+      //oColor = vec4(vCoord, 0, 1);
+    }
+  `);
 prog.aCoord = gl.getAttribLocation(prog, 'aCoord');
+prog.uScaleY = gl.getUniformLocation(prog, 'uScaleY');
 prog.uOffset = gl.getUniformLocation(prog, 'uOffset');
-prog.uTex = gl.getUniformLocation(prog, 'uTex');
-
-error = gl.getError();
-ASSERT(error == 0, 'Should be no errors: ' + error.toString(16));
-
-const vbo = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-
-const vertData = [
-  0, 0,
-  1, 0,
-  0, 1,
-  1, 1,
-];
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertData), gl.STATIC_DRAW);
-gl.vertexAttribPointer(prog.aCoord, 2, gl.FLOAT, false, 0, 0);
-gl.enableVertexAttribArray(prog.aCoord);
 
 gl.useProgram(prog);
-gl.uniform1i(prog.uTex, 0);
-
-const video = document.createElement('video');
-video.src = 'InL7Il5.mp4';
-video.muted = true;
-video.loop = true;
-video.muted = true;
-video.play();
-
-video.addEventListener('playing', tick, true);
+gl.uniform1f(prog.uScaleY, -1);
 
 const tex = gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -128,24 +112,162 @@ gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-function tick() {
-  video.removeEventListener('playing', tick, true);
+function checkErrors() {
+  const error = gl.getError();
+  if (error) throw `error: ${keyByValue(gl, error)}`;
+}
 
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+const CRUELTY = 3;
 
-  var a = 3 * performance.now() / 1000;
+function frame(texSrc, i) {
+  const cruelty = parseInt(e_cruelty.value) || 0;
+  try {
+    for (const c of range(1 + cruelty)) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, VIDEO);
+    }
+  } catch (e) {
+    console.error(e);
+  }
 
-  var x = 0.3 * Math.cos(a);
-  var y = 0.3 * Math.sin(a);
+  const a = 2 * Math.PI * i / 60 / 3;
+  const x = 0.3 * Math.cos(a);
+  const y = 0.3 * Math.sin(a);
   gl.uniform2f(prog.uOffset, x, y);
 
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-  error = gl.getError();
-  ASSERT(error == 0, 'Should be no errors3: ' + error.toString(16));
-
-  requestAnimationFrame(tick);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4) ;
 }
+
+async function runN(desc, n) {
+  const begin = performance.now();
+  for (const i of range(n)) {
+    frame(desc.texSrc, i);
+    await desc.nextFramePromise();
+  }
+  const diff = performance.now() - begin;
+  return diff / n;
+}
+
+async function test(desc) {
+  //await runN(desc, desc.n); // warmup
+  return await runN(desc, desc.n);
+}
+
+// -
+
+let VIDEO;
+let HAS_VIDEO_CHANGED = false;
+
+function useVideo(v) {
+  VIDEO = v;
+  HAS_VIDEO_CHANGED = true;
+  console.log(`VIDEO.desc: ${VIDEO.desc}`);
+}
+
+call(async () => {
+  await useDoggo();
+
+  const DESC = {
+    n: 60 * 3,
+    nextFramePromise: rafPromise,
+  }
+  while (true) {
+    const ms = await test(DESC);
+
+    let desc = VIDEO.desc;
+    if (HAS_VIDEO_CHANGED) {
+      desc = '(multiple)';
+      HAS_VIDEO_CHANGED = false;
+    }
+    const text = `${desc}: ${ms.toFixed(2)}ms/frame`;
+
+    e_score.textContent = text;
+    console.log(text);
+  }
+});
+
+// -
+
+async function makeLoopedVideo(url) {
+  const video = document.createElement('video');
+  video.src = url;
+  video.muted = true;
+  video.loop = true;
+  try {
+    await video.play();
+  } catch (e) {
+    console.error(e);
+  }
+  video.desc = url;
+  return video;
+}
+
+async function makeUserMediaVideo(constraints) {
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  return await makeMediaStreamVideo(stream, 'getUserMedia');
+}
+
+async function makeDisplayMediaVideo(options) {
+  options = options || {};
+  const stream = await navigator.mediaDevices.getDisplayMedia(options);
+  return await makeMediaStreamVideo(stream, 'getDisplayMedia');
+}
+
+async function makeMediaStreamVideo(stream, api) {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.srcObject = stream;
+  await video.play();
+  const track = stream.getVideoTracks()[0];
+  video.desc = `${api}:"${track.label}"`;
+  return video;
+}
+
+// -
+
+async function enumVideoInputs() {
+  {
+    let c;
+    while (c = e_input_list.firstChild) {
+      e_input_list.removeChild(c);
+    }
+  }
+
+  const userMediaDeviceInfos = await navigator.mediaDevices.enumerateDevices();
+  console.log({userMediaDeviceInfos});
+  for (const info of userMediaDeviceInfos) {
+    if (info.kind != 'videoinput') continue;
+    const e = e_input_list.appendChild(document.createElement('li'));
+    e.userMediaInfo = info;
+    e.button = e.appendChild(document.createElement('input'));
+    e.button.type = 'button';
+    const desc = `${info.label}@${info.deviceId}`;
+    e.button.value = `Use ${desc}`;
+    e.button.addEventListener('click', async () => {
+      const v = await makeUserMediaVideo({
+        // Ok this is clunky AF, but...
+        video: { deviceId: { exact: info.deviceId } }
+      });
+      useVideo(v);
+    });
+  }
+}
+
+// -
+
+async function useDoggo() {
+  const URL = 'InL7Il5.mp4';
+  const v = await makeLoopedVideo(URL);
+  useVideo(v);
+}
+
+async function useUserDisplay() {
+  const v = await makeDisplayMediaVideo();
+  useVideo(v);
+}
+
+e_use_doggo.addEventListener('click', useDoggo);
+e_use_display.addEventListener('click', useUserDisplay);
+e_enum_inputs.addEventListener('click', enumVideoInputs);
 
     </script>
   </body>
