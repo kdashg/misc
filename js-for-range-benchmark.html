@@ -8,6 +8,7 @@
     <br>Height (default 1000): <input id=e_h type=text>
     <br>Points (default 100): <input id=e_points type=text>
     <br>Reps (default 10): <input id=e_reps type=text>
+    <br><input type=button id=e_run value=Run>
     <br><pre id=e_output></pre>
     <script>
 
@@ -16,7 +17,7 @@
 /// Don't use `i in range(n)`, it will quietly not work.
 function* range(a, b) {
   if (b === undefined) {
-  	b = a;
+    b = a;
     a = 0;
   }
   for (let i = a; i < b; i++) {
@@ -50,6 +51,10 @@ function range3(a) {
   };
 }
 
+function range4(a) {
+  return Array(a).keys();
+}
+
 /// Prefer `call(() => { ... })` to `(() => { ... })()`\
 /// This way, it's clear up-front that we're calling not just defining.
 function call(fn) {
@@ -64,16 +69,12 @@ function sleepPromise(ms) {
 
 // -
 
-function bench(name, fn) {
-  const W = parseInt(e_w.value) || 1000;
-  const H = parseInt(e_h.value) || 1000;
-  const POINTS = parseInt(e_points.value) || 100;
-  const REPS = parseInt(e_reps.value) || 10;
+function bench(desc, name, fn) {
   const MAX_VAL_PER_POINT = 10;
 
-  const data = new Uint32Array(W * H);
+  const data = new Uint32Array(desc.w * desc.h);
   let sum = 0;
-  for (const i of range(POINTS)) {
+  for (const i of range(desc.points)) {
     const val = (Math.random()*MAX_VAL_PER_POINT)|0;
     const pos = (Math.random()*data.length)|0;
     data[pos] = val;
@@ -81,13 +82,13 @@ function bench(name, fn) {
   }
 
   const start = performance.now();
-  for (const i of range(REPS)) {
-    const found = fn(W, H, data);
+  for (const i of range(desc.reps)) {
+    const found = fn(desc.w, desc.h, data);
     console.assert(found == sum, {found}, {sum});
   }
   const ms = performance.now() - start;
-  const msPerRep = ms / REPS;
-  e_output.textContent += `\n${name}: ${msPerRep.toFixed(2)}ms/rep`;
+  const msPerRep = ms / desc.reps;
+  e_output.textContent += `\n   ${name}: ${msPerRep.toPrecision(3)}ms/rep`;
 }
 
 const FLAVORS = {
@@ -170,7 +171,7 @@ const FLAVORS = {
   range3_2d: (w, h, data) => {
     let sum = 0;
     for (const y of range3(h)) {
-      for (const x of range2(w)) {
+      for (const x of range3(w)) {
         const val = data[y*w+x];
         if (val) {
           sum += val;
@@ -179,14 +180,67 @@ const FLAVORS = {
     }
     return sum;
   },
+  range4_1d: (w, h, data) => {
+    let sum = 0;
+    for (const i of range4(data.length)) {
+      const val = data[i];
+      if (val) {
+        sum += val;
+      }
+    }
+    return sum;
+  },
+  range4_2d: (w, h, data) => {
+    let sum = 0;
+    for (const y of range4(h)) {
+      for (const x of range4(w)) {
+        const val = data[y*w+x];
+        if (val) {
+          sum += val;
+        }
+      }
+    }
+    return sum;
+  },
+  foreach_1d: (w, h, data) => {
+    let sum = 0;
+    new Uint8Array(data.length).forEach((_,i) => {
+      const val = data[i];
+      if (val) {
+        sum += val;
+      }
+    });
+    return sum;
+  },
+  foreach_2d: (w, h, data) => {
+    let sum = 0;
+    new Uint8Array(h).forEach((_,y) => {
+      new Uint8Array(w).forEach((_,x) => {
+        const val = data[y*w+x];
+        if (val) {
+          sum += val;
+        }
+      });
+    });
+    return sum;
+  },
 };
 
-call(async () => {
+async function run() {
+  const desc = {
+    w: parseInt(e_w.value) || 1000,
+    h: parseInt(e_h.value) || 1000,
+    points: parseInt(e_points.value) || 100,
+    reps: parseInt(e_reps.value) || 10,
+  };
+  e_output.textContent += `\n\n${JSON.stringify(desc)}:`;
   for (const [name,fn] of Object.entries(FLAVORS)) {
-    bench(name, fn);
+    bench(desc, name, fn);
     await sleepPromise();
   }
-});
+}
+run();
+e_run.addEventListener('click', run);
 
     </script>
   </body>
