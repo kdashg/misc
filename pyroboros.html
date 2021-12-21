@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset=utf-8>
+</head>
+<body>
+Python PEP484 source:
+<br><textarea id=e_src style='width:100vw;'>
+def splitn(string: str, delim: str, max_splits: int) -> List[str]:
+   splits: List[str] = []
+   string_begin: int = 0
+   for i in range(max_splits):
+      split_begin: int = string.find(delim, string_begin)
+      if split_begin == -1: break
+      splits.append(string[string_begin : split_begin])
+      string_begin = split_begin + len(delim)
+
+   splits.append(string[string_begin:])
+   return splits
+</textarea>
+<br>Outputs
+<br><textarea id=e_output_order cols=20 rows=10>
+pep484
+py
+js
+cpp
+rust
+</textarea>
+<br><input type=button id=e_compile value=Compile>
+<hr>
+<ul id=e_outputs>
+</ul>
+<script>
+
+function auto_height(e) {
+  e.style.height = 'auto';
+  e.style.height = (e.scrollHeight) + 'px';
+}
+auto_height(e_src)
+
+const TRANSLATE = {};
+TRANSLATE['pep484'] = function (src, root) {
+   // Tadaaaa...
+   return `\
+from typing import *
+
+${src}`;
+};
+
+const NEST_END_BY_BEGIN = {
+   '(': ')',
+   '[': ']',
+   '{': '}',
+   '<': '>',
+   '#': '\n',
+   '\'': '\'',
+   '"': '"',
+   '`': '`',
+};
+
+function count_repeats(s, d) {
+   let i;
+   for (i = 0; i < s.length; i += d.length) {
+      if (!s.startsWith(d, i)) break;
+   }
+   return i;
+}
+
+function find_next_unnested(s, d, begin) {
+   begin = begin || 0;
+   const end_stack = [];
+   for (let i = begin; i < s.length; i++) {
+      if (end_stack.length) {
+         const top = end_stack[end_stack.length-1];
+         if (s.startsWith(top, i)) {
+            if (top == '\n') {
+               i -= 1;
+            }
+            end_stack.pop();
+         }
+         continue;
+      }
+      if (s.startsWith(d, i)) {
+         return i;
+      }
+      const c = s[i];
+      let end = NEST_END_BY_BEGIN[c];
+      if (end) {
+         if (c == end) { // For block quotes
+            const repeats = count_repeats(s, c, i);
+            if (repeats >= 3) {
+               end = s.slice(i, i+repeats);
+               i += end.length - 1;
+            }
+         }
+         end_stack.push(end);
+      }
+   }
+   return -1;
+}
+console.assert((was = find_next_unnested('def a(b:c):', ':')) == 10, was);
+
+function split_once_unnested(s, d, begin) {
+   begin = begin || 0;
+   const pos = find_next_unnested(s, d, begin);
+   let ret;
+   if (pos == -1) {
+      ret = [s];
+   } else {
+      ret = [
+         s.substr(begin, pos-begin),
+         s.substr(pos+d.length),
+      ];
+   }
+   //console.log('split_once_unnested', {s, d, begin, ret});
+   return ret;
+}
+
+function splitOnce(s, d, begin) {
+   begin = begin || 0;
+   const pos = s.indexOf(d, begin);
+   if (pos == -1) {
+      return [s];
+   }
+   return [
+      s.substr(begin, pos-begin),
+      s.substr(pos+d.length),
+   ];
+}
+
+
+function parse_var_decl(s) {
+   let [name, type] = splitOnce(s, ':');
+   return new ParseDecl(name.trim(), type.trim());
+}
+function ParseDecl(name, type) {
+   this.name = name;
+   this.type = type;
+}
+
+function parse_def(s) {
+   const RE_DEF = /^ *def +(.+?)\((.*?)\) *->(.+?):/s;
+   let [match, name, args_str, ret_type] = s.match(RE_DEF);
+   name = name.trim();
+   ret_type = ret_type.trim();
+
+   let args = [];
+   {
+      let pos = 0;
+      while (pos < args_str.length) {
+         let sep = find_next_unnested(args_str, ',', pos);
+         if (sep == -1) break;
+
+         args.push(args_str.substr(pos, sep-pos).trim());
+         pos = sep + 1;
+      }
+      args.push(args_str.substr(pos).trim());
+   }
+   args = args.map(a => parse_var_decl(a));
+   return new ParseDef(name, args, ret_type);
+}
+function ParseDef(name, args, ret_type) {
+   this.name = name;
+   this.args = args;
+   this.ret_type = ret_type;
+}
+
+function index_of(s, d, pos) {
+   return s.indexOf(d, pos);
+}
+
+function substr_until(s, d, begin, fn) {
+   fn = fn || index_of;
+   const end = fn(s, d, begin);
+   if (end == -1) return s;
+   return s.substr(begin, end - begin);
+}
+
+function line_col(s, pos) {
+   let line_num = 1;
+   let line_begin = 0;
+   while (true) {
+      const newline = s.indexOf('\n', line_begin);
+      if (newline == -1 || newline >= pos) break;
+      line_num += 1;
+      line_begin = newline+1;
+   }
+   return {
+      line: line_num,
+      col: pos - line_begin,
+   };
+}
+
+function line_pos_info(s, pos, info) {
+   const line_info = line_col(s, pos);
+   const line_start = pos - line_info.col;
+   const line = substr_until(s, '\n', line_start);
+   const arrow_line = '-'.repeat(line_info.col) + '^';
+   return `L${line_info.line}:${line_info.col}: ${info}
+${line}
+${arrow_line}`;
+}
+
+function ParseBlock(prev_level) {
+   this.prev_level = prev_level;
+   this.level = -1;
+   this.statements = [];
+}
+
+function ParseCommment(comment) {
+   this.comment = comment;
+}
+
+function parse_condition(cond) {
+   let [cmd, expr] = split_once_unnested(cond, ' ');
+   expr = parse_expr(expr);
+   return new ParseCondition(cmd, expr);
+}
+function ParseCondition(cmd, expr) {
+   this.cmd = cmd;
+   this.expr = expr;
+}
+function ParseFor(ident, expr) {
+   this.ident = ident;
+   this.expr = expr;
+}
+
+function parse_expr(text) {
+   return new ParseExpr(text.trim());
+}
+function ParseExpr(text) {
+   this.text = text;
+}
+function ParseAssign(left, right) {
+   this.left = left;
+   this.right = right;
+}
+
+function ParseNewline() {
+}
+
+// -
+
+function parse(s) {
+   const block_stack = [new ParseBlock()];
+   let this_block = block_stack[0];
+   for (let line_begin = 0; line_begin < s.length; ) {
+      let pos = line_begin;
+    try{
+      let line = substr_until(s, '\n', line_begin, find_next_unnested);
+      console.log('|', line);
+      line_begin += line.length + 1;
+
+      // Handle indentation level
+      const without_indents = line.trimStart();
+      if (!without_indents.length) {
+         this_block.statements.push(new ParseNewline());
+         continue;
+      }
+      const line_level = line.length - without_indents.length;
+      line = without_indents;
+      pos += line_level;
+      if (this_block.level != -1) {
+         // Must be at this level or lower.
+         while (line_level < this_block.level) {
+            // Pop
+            block_stack.pop();
+            this_block = block_stack[block_stack.length-1];
+         }
+         if (line_level > this_block.level) throw line_pos_info(s, pos, 'Unexpected indent.');
+      } else {
+         if (line_level <= this_block.prev_level) throw line_pos_info(s, pos, 'Expected indent.');
+         this_block.level = line_level;
+      }
+
+      // Handle EOL comment
+      let comment_begin = find_next_unnested(line, '#');
+      let comment = null;
+      if (comment_begin != -1) {
+         // Absorb preceeding spaces to retain alignment
+         while (comment_begin >= 1 && line[comment_begin-1] == ' ') {
+            comment_begin -= 1;
+         }
+         const comment_str = line.substr(comment_begin);
+         comment = new ParseComment(comment_str);
+         line = line.substr(comment_begin).trimEnd();
+      }
+/*
+      // Drop optional semicolon
+      if (line.endsWith(';')) {
+         if (line.endsWith(':;')) throw line_pos_info(s, pos, 'Unexpected indent.');
+         line = line.substr(0, line.length-1);
+      }
+*/
+      // Directives. At worst e.g. "if 1: 2; return 3"
+      // But don't match "foo: int"!
+      let directive = null;
+      let expr = null;
+      if (line.startsWith('def ')) {
+         directive = parse_def(line);
+         let def_str;
+         [def_str, line] = split_once_unnested(line, ':');
+         line = line || '';
+         pos += def_str.length + 1;
+
+      } else if (line.startsWith('for ')) {
+         // "for I in RANGE(N)"
+         // "for I in RANGE(A,B)"
+         // "for V in LIST/SET"
+         // "for K in DICT"
+         // "for (K,V) in DICT.items()"
+         line = line.substr(4);
+         pos += 4;
+         let ident, iterable;
+         [ident, line] = splitOnce(line, ' in ');
+         if (!line) throw line_pos_info(s, pos, '`for` missing ` in `.');
+         pos += ident.length + 4;
+
+         [iterable, line] = split_once_unnested(line, ':');
+         line = line || '';
+         pos += iterable.length + 1;
+         directive = new ParseFor(ident, parse_expr(iterable));
+
+      } else if (line.startsWith('while ') ||
+                 line.startsWith('if ') ||
+                 line.startsWith('elif ')) {
+         [cond, line] = split_once_unnested(line, ':');
+         line = line || '';
+         pos += cond.length+1;
+         directive = parse_condition(cond);
+
+      } else if (line.startsWith('else')) {
+         // Don't match "elseval: int = 4;"
+         // Do match "else : 1;"
+         const [a, b] = split_once_unnested(line, ':');
+         if (a.trim() == 'else') {
+            statement = new ParseElse();
+            const len = a.length+1;
+            line = line.substr(len);
+            pos += len;
+         }
+      } else {
+         // expression or "ident: type"  or "a: b; c: d"...
+      }
+      if (directive) {
+         this_block.statements.push(directive);
+         this_block = directive.block = new ParseBlock(line_level);
+         block_stack.push(this_block);
+      }
+
+      // Statement(s)
+      // E.g. 1; 2; 3
+      let is_inline_directive = false;
+      while (line.length) {
+         is_inline_directive = !!directive;
+         const cur = substr_until(line, ';', 0, find_next_unnested);
+
+         // "a = b = 3" ok, but forbid
+         // "a:int = b = 3" bad
+         // "a = b:int = 3" bad
+         // "a:int, b:int" ok, but forbid
+
+         // "a:b" ok
+         // "a = c" ok
+         // "a:b = c" ok
+         let [ab,c] = split_once_unnested(cur, '=');
+         let [a, b] = split_once_unnested(ab, ':');
+         if (b) {
+            ab = parse_var_decl(ab);
+         } else {
+            ab = parse_expr(a);
+         }
+         if (c) {
+            c = parse_expr(c);
+            this_block.statements.push(new ParseAssign(ab, c));
+         } else {
+            this_block.statements.push(ab);
+         }
+
+         const len = cur.length+1;
+         line = line.substr(len);
+         pos += len;
+      }
+
+      // End directive block if inline
+      if (is_inline_directive) {
+         block_stack.pop();
+         this_block = block_stack[block_stack.length-1];
+      }
+
+      // We're done!
+      if (line != line.trim()) throw line_pos_info(s, pos, 'Unexpected tokens at end of line.');
+      if (comment) {
+         this_block.statements.push(comment);
+      }
+      this_block.statements.push(new ParseNewline());
+    } catch (e) {
+      console.error({block_stack}, line_pos_info(s, pos, 'Incoming exception...'));
+      throw e;
+    }
+   }
+   return block_stack[0];
+}
+
+
+TRANSLATE['py'] = function (src, root) {
+   const out = [];
+
+   function for_expr(expr) {
+      out.push(expr.text);
+   }
+
+   function maybe_indent(level) {
+      if (level > 0 && out[out.length-1] == '\n') {
+         out.push(' '.repeat(level));
+      }
+   }
+   function for_block(info, block) {
+      //console.log('for_block', {info, block});
+
+      for (const s of block.statements) {
+         //console.log(s.constructor.name, s);
+         switch (s.constructor.name) {
+         case 'ParseNewline':
+            out.push('\n');
+            break;
+         case 'ParseComment':
+            out.push(s.comment);
+            break;
+         case 'ParseAssign':
+            maybe_indent(block.level);
+            switch (s.left.constructor.name) {
+            case 'ParseDecl':
+               out.push(s.left.name);
+               break;
+            case 'ParseExpr':
+               for_expr(s.left);
+               break;
+            default:
+               throw s.left.constructor.name;
+            }
+            if (s.right) {
+               out.push(' = ');
+               for_expr(s.right);
+            }
+            break;
+         case 'ParseExpr':
+            maybe_indent(block.level);
+            //console.log('ParseExpr', s.text);
+            for_expr(s);
+            break;
+         case 'ParseDecl':
+            maybe_indent(block.level);
+            out.push(name);
+            break;
+         case 'ParseDef':
+            maybe_indent(block.level);
+            out.push('def ', s.name, '(');
+            for (const arg of s.args) {
+               out.push(arg.name);
+            }
+            out.push('): '); // Poor guy is sad without a static type!
+            for_block('def', s.block);
+            break;
+         case 'ParseFor':
+            maybe_indent(block.level);
+            out.push('for ', s.ident, ' in ');
+            for_expr(s.expr);
+            out.push(': ');
+            for_block('for', s.block);
+            break;
+         case 'ParseCondition':
+            maybe_indent(block.level);
+            out.push(s.cmd, ' ');
+            for_expr(s.expr);
+            out.push(': ');
+            for_block(s.cmd, s.block);
+            break;
+         case 'ParseElse':
+            maybe_indent(block.level);
+            out.push('else: ');
+            for_block('else', s.block);
+            break;
+         default:
+            throw s.constructor.name;
+         }
+      }
+      //console.log('~for_block', {info, block});
+   }
+   for_block('root', root);
+   return out.join('');
+};
+
+
+function compile() {
+   const src = e_src.textContent;
+   const root = parse(src);
+   console.log({root});
+   const output_langs = e_output_order.textContent.trim().split('\n');
+   while (e_outputs.firstChild) { e_outputs.removeChild(e_outputs.firstChild); }
+   for (const lang of output_langs) {
+      const li = e_outputs.appendChild(document.createElement('li'));
+      const details = li.appendChild(document.createElement('details'));
+      details.open = true;
+      const summary = details.appendChild(document.createElement('summary'));
+      summary.textContent = `-> ${lang}:`;
+      const pre = details.appendChild(document.createElement('pre'));
+      pre.style.backgroundColor = '#eee';
+
+      let out;
+      try {
+         let fn = TRANSLATE[lang];
+         if (!fn) {
+            out = 'TODO: ' + lang;
+         } else {
+            out = TRANSLATE[lang](src, root);
+         }
+      } catch (e) {
+         out = e;
+         throw e;
+      }
+      pre.textContent = out;
+   }
+}
+compile();
+
+</script>
+</body>
+</html>
