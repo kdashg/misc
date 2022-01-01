@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <script src='matrices.js'></script>
+  </head>
+  <body>
+    <textarea id=e_additions width=100% rows=5></textarea>
+    <br>
+    <img id='e_img' src=''>
+    <br>
+    =&gt;
+    <br>
+    <canvas id='e_vyu'>
+    <script>
+'use strict';
+
+/// `for (const i of range(3))` => 0, 1, 2
+/// Don't use `for...in range(n)`, it will not work.
+function* range(n) {
+  for (let i = 0; i < n; i++) {
+    yield i;
+  }
+}
+
+/// Prefer `call(() => { ... })` to `(() => { ... })()`\
+/// This way, it's clear up-front that we're calling not just defining.
+function call(fn) {
+    return fn();
+}
+
+function sleepPromise(ms) {
+  return new Promise(go => {
+    setTimeout(go, ms);
+  });
+}
+
+function rafPromise() {
+  return new Promise(go => {
+    requestAnimationFrame(go);
+  });
+}
+
+// -
+
+function yxyToXyz(C) {
+  const z = 1 - C.x - C.y;
+  const X = (C.Y / C.y) * C.x;
+  const Z = (C.Y / C.y) * z;
+  return {X:X, Y:C.Y, Z:Z};
+}
+
+function makeToCieXyz(luminance_coeffs, prims) {
+  // e.g. (1,0,0) => (R.x, R.y)
+  luminance_coeffs.r.defined;
+  luminance_coeffs.g.defined;
+  luminance_coeffs.b.defined;
+  //primaries.w.x.defined;
+  //primaries.w.y.defined;
+  primaries.r.x.defined;
+  primaries.r.y.defined;
+  primaries.g.x.defined;
+  primaries.g.y.defined;
+  primaries.b.x.defined;
+  primaries.b.y.defined;
+
+  const Rxyz = yxyToXyz({Y:luminance_coeffs.r, x:primaries.r.x, y:primaries.r.x });
+  const Gxyz = yxyToXyz({Y:luminance_coeffs.g, x:primaries.g.x, y:primaries.g.x });
+  const Bxyz = yxyToXyz({Y:luminance_coeffs.b, x:primaries.b.x, y:primaries.b.x });
+
+  return matTrans([ [ Rxyz.X, Gxyz.X, Bxyz.X ],
+                    [ Rxyz.Y, Gxyz.Y, Bxyz.Y ],
+                    [ Rxyz.Z, Gxyz.Z, Bxyz.Z ] ]);
+}
+
+COLORSPACE = {
+  SRGB:
+
+class CieXyzColor {
+  x = 0;
+  y = 0;
+  z = 0;
+
+  static fromRgb(r, g, b, space='rec709', gamma=true) {
+
+  }
+
+
+
+
+};
+
+// -
+
+document.body.style.backgroundColor = '#bff';
+
+e_vyu.rc = e_vyu.getContext('2d');
+
+// -
+
+function TransFuncGammaPiecewise(desc) {
+  this.desc = desc;
+
+  desc.low_coeff.required;
+  desc.split.required;
+  desc.high_coeff.required;
+  desc.exp.required;
+
+  const low_split_enc = desc.low_coeff * desc.split;
+  const high_split_enc_offset = desc.high_coeff * Math.pow(desc.split, desc.exp) - low_split_enc;
+
+  this.encode = function(phys_val) {
+    if (phys_val < desc.split) {
+      return phys_val * desc.low_coeff;
+    }
+    return Math.pow(phys_val, desc.exp) * desc.high_coeff - high_split_enc_offset;
+  }
+
+  this.decode = function(enc_val) {
+    if (enc_val < low_split_enc) {
+      return enc_val / desc.low_coeff;
+    }
+    return Math.pow((enc_val + high_split_enc_offset) / desc.high_coeff, 1.0 / desc.exp);
+  }
+}
+
+function NoQuant() {
+  this.encode = x => x;
+  this.decode = x => x;
+}
+
+function NormQuant(zero, one) {
+  const scale = one - zero;
+  this.encode = x => zero + ((x * scale + 0.5) | 0); // +0.5 for nearest int rounding
+  this.decode = x => (x - zero) / scale;
+}
+
+DOMMatrixReadOnly.prototype.transpose = function() {
+	const src_arr = this.toFloat32Array();
+  const dst_arr = new Float32Array(16);
+  for (let x = 0; x < 4; x++) {
+    for (let y = 0; y < 4; y++) {
+			dst_arr[4*x+y] = src_arr[4*y+x];
+    }
+  }
+  return new DOMMatrix(dst_arr);
+}
+
+function new_matrix_row_major(row_major) {
+  return new DOMMatrix(row_major).transpose();
+}
+
+function matrix_signed_vyu_from_rgb(kr, kg, kb) {
+  // yuv ~= YCbCr, so CrYCb is redish,greenish,bluish is vyu!
+  const u_range = 1-kb;
+  const v_range = 1-kr;
+  const signed_uv_from_rgb = new_matrix_row_major([
+    (1-kr)/v_range, -kg/v_range, -kb/v_range, 0, // V
+    kr, kg, kb, 0, // Y
+    -kr/u_range, -kg/u_range, (1-kb)/u_range, 0, // U
+    0, 0, 0, 1
+  ]);
+  return signed_uv_from_rgb;
+}
+
+function matrix_signed_vyu_from_rgb(kr, kg, kb) {
+  const unsigned_uv_from_signed = new_matrix_row_major([
+    0.5, 0,   0, 0.5, // V
+      0, 1,   0,   0, // Y
+      0, 0, 0.5, 0.5, // U
+      0, 0,   0,   1,
+  ]);
+  return unsigned_uv_from_signed.multiply(signed_uv_from_rgb);
+}
+
+function ColorSpace(name, from_xyz, tfunc, quants) {
+  const to_xyz = from_xyz.inverse();
+
+  quants.required;
+
+  this.name = name;
+  this.from_xyz = from_xyz;
+  this.to_xyz = to_xyz;
+  this.tfunc = tfunc;
+  this.quants = quants;
+
+  this.convert_from = function(src_color, src_space) {
+    src_space = src_space || ColorSpace.SRGB;
+
+    src_color = src_color.map( (x,i) => src_space.quants[i].decode(x) );
+    src_color = src_color.map( x => src_space.tfunc.decode(x) );
+
+    const src_phys = new DOMPoint(
+      src_color[0],
+      src_color[1],
+      src_color[2],
+      1);
+    const xyz_phys = src_space.to_xyz.transformPoint(src_phys);
+    const dst_phys = this.from_xyz.transformPoint(xyz_phys);
+    let dst_color = [dst_phys.x, dst_phys.y, dst_phys.z];
+
+    dst_color = dst_color.map( x => this.tfunc.encode(x) );
+    dst_color = dst_color.map( (x,i) => this.quants[i].encode(x) );
+    return dst_color;
+  };
+}
+
+// -
+
+const SRGB_FROM_XYZ = new_matrix_row_major([
+  +3.24096994, -1.53738318, -0.49861076, 0,
+  -0.96924364, +1.87596750, +0.04155506, 0,
+  +0.05563008, -0.20397696, +1.05697151, 0,
+  0, 0, 0, 1
+]);
+const SRGB_GAMMA_DESC = {
+  low_coeff: 12.92,
+  split: 0.0031308,
+  high_coeff: 1.055,
+  exp: 1/2.4,
+};
+
+function GetNormQuant(zero, one) {
+  const key = [zero, one].join(',');
+  NormQuant.cache = NormQuant.cache || {};
+  let ret = NormQuant.cache[key];
+  if (!ret) {
+    ret = NormQuant.cache[key] = new NormQuant(zero, one);
+  }
+  return ret;
+}
+
+function GetSNormQuant(zero, one) {
+  const one_diff = one - zero;
+  return GetNormQuant(zero - one_diff, one);
+}
+
+const QUANTS_RGB8 = [
+  GetNormQuant(0,255),
+  GetNormQuant(0,255),
+  GetNormQuant(0,255),
+];
+const QUANTS_VYU8_FULL = [
+  GetSNormQuant(128,255), // Note that -1.0 is 1 not 0!
+  GetNormQuant(0,255),
+  GetSNormQuant(128,255),
+];
+const QUANTS_VYU8_LIMITED = [
+  GetSNormQuant(128,240),
+  GetNormQuant(16,235),
+  GetSNormQuant(128,240),
+];
+ColorSpace.SRGB = new ColorSpace('srgb8', SRGB_FROM_XYZ,
+  new TransFuncGammaPiecewise(SRGB_GAMMA_DESC), QUANTS_RGB8);
+
+const REC709_VYU_FROM_SRGB = matrix_vyu_from_rgb(0.2126, 0.7152, 0.0722);
+const REC709_FROM_XYZ = REC709_VYU_FROM_SRGB.multiply(SRGB_FROM_XYZ);
+const REC709_GAMMA_DESC = {
+  low_coeff: 4.5,
+  split: 0.018,
+  high_coeff: 1.099,
+  exp: 0.45,
+};
+ColorSpace.REC709Full = new ColorSpace('rec709yuv8full', REC709_FROM_XYZ,
+  new TransFuncGammaPiecewise(REC709_GAMMA_DESC), QUANTS_VYU8_FULL);
+
+// -
+
+function convert_idata(src_idata, dst_space) {
+  const src = src_idata.data;
+  const src_space = src_idata.color_space || ColorSpace.SRGB;
+  const pixel_count = src_idata.width * src_idata.height;
+  const dst = new Uint8ClampedArray(pixel_count * 4);
+  for (let i = 0; i < pixel_count; i++) {
+    const s = [
+      src[4*i+0],
+      src[4*i+1],
+      src[4*i+2],
+    ];
+    const d = dst_space.convert_from(s, src_space);
+    dst[4*i+0] = d[0];
+    dst[4*i+1] = d[1];
+    dst[4*i+2] = d[2];
+    dst[4*i+3] = src[4*i+3];
+  }
+  const dst_idata = new ImageData(dst, src_idata.width, src_idata.height);
+  dst_idata.color_space = dst_space;
+  return dst_idata;
+}
+
+// -
+
+function ConversionLut(src_space, dst_space, src_bpc, arr_type, n=32, pixel_stride=4) {
+  // Input: [min,max] vec3
+  // Output: encoded vec3
+
+  // While it would be really cool to use encoded values as coords directly,
+  // this would make it hard/impossible to get -1.0 u/v values on e.g.
+  // full-range, since 0x00 is actually -128/127, which is outside the valid range.
+  // Also, we'd be giving up accuracy for limited-range encodings, since
+  // e.g. 0x00-0x10 lut entries would be totally wasted.
+
+  // Therefore, we de-quantize to [0.0,1.0], and we use a color matrix
+  // that maps the signed u[-1,+1] to an unsigned u'=[0,1].
+  this.src_bpc = src_bpc;
+  this.n = n;
+  this.pixel_stride = pixel_stride;
+  const data = this.data = new arr_type(n*n*n*pixel_stride);
+
+  const scale = 1/(n-1);
+  let itr = 0;
+  const src = [0, 0, 0];
+  for (let z = 0; z < n; z++) {
+    src[2] = z * scale;
+    for (let y = 0; y < n; y++) {
+      src[1] = y * scale;
+      for (let x = 0; x < n; x++) {
+        src[0] = x * scale;
+        const dst = dst_space.convert_from(src, src_space);
+        data[itr+0] = dst[0];
+        data[itr+1] = dst[1];
+        data[itr+2] = dst[2];
+        itr += pixel_stride;
+      }
+    }
+  }
+}
+
+// -
+
+async function set_image(src) {
+  e_img.src = src;
+  await e_img.decode();
+
+  const rc = e_vyu.rc;
+  const W = rc.canvas.width = e_img.width;
+  const H = rc.canvas.height = e_img.height;
+  rc.drawImage(e_img, 0, 0);
+  const idata_rgb = rc.getImageData(0, 0, W, H);
+  console.log('idata_rgb', idata_rgb);
+  const idata_vyu = convert_idata(idata_rgb, ColorSpace.REC709Full);
+  console.log('idata_vyu', idata_vyu);
+  rc.putImageData(idata_vyu, 0, 0);
+}
+//set_image('https://media.prod.mdn.mozit.cloud/attachments/2013/06/22/5397/7a3ec0cae64a95ad454ac3bc2c71c004/rhino.jpg');
+    </script>
+  </body>
+</html>
