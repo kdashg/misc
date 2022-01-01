@@ -136,6 +136,7 @@ function parse_var_decl(s) {
 function ParseDecl(name, type) {
    this.name = name;
    this.type = type;
+   this.is_mutated = false;
 }
 
 function parse_def(s) {
@@ -201,10 +202,14 @@ ${line}
 ${arrow_line}`;
 }
 
-function ParseBlock(prev_level) {
-   this.prev_level = prev_level;
+function ParseBlock(prev_block) {
    this.level = -1;
    this.statements = [];
+   this.vars = {};
+   if (prev_block) {
+      this.prev_level = prev_block.level;
+      Object.assign(this.vars, prev_block.vars);
+   }
 }
 
 function ParseCommment(comment) {
@@ -319,6 +324,10 @@ function parse(s) {
          [iterable, line] = split_once_unnested(line, ':');
          line = line || '';
          pos += iterable.length + 1;
+
+         // We need to infer the type of ident from expr.
+         // But for now...
+         ident = new ParseDecl(ident);
          directive = new ParseFor(ident, parse_expr(iterable));
 
       } else if (line.startsWith('while ') ||
@@ -344,8 +353,17 @@ function parse(s) {
       }
       if (directive) {
          this_block.statements.push(directive);
-         this_block = directive.block = new ParseBlock(line_level);
+         this_block = directive.block = new ParseBlock(this_block);
          block_stack.push(this_block);
+
+         if (directive.args) { // def...
+            directive.args.forEach(a => {
+               this_block.vars[a.name] = a;
+            });
+         }
+         if (directive.ident) { // for...
+            this_block.vars[directive.ident] = directive.ident;
+         }
       }
 
       // Statement(s)
@@ -367,12 +385,18 @@ function parse(s) {
          let [a, b] = split_once_unnested(ab, ':');
          if (b) {
             ab = parse_var_decl(ab);
+            if (this_block.vars[a]) throw line_pos_info(s, pos, 'Redecl of var.');
+            this_block.vars[a] = ab;
          } else {
             ab = parse_expr(a);
          }
          if (c) {
             c = parse_expr(c);
             this_block.statements.push(new ParseAssign(ab, c));
+
+            if (!b && this_block.vars[a]) {
+               this_block.vars[a].is_mutated = true;
+            }
          } else {
             this_block.statements.push(ab);
          }
@@ -402,6 +426,10 @@ function parse(s) {
    return block_stack[0];
 }
 
+function makeFormatter() {
+   return {
+   };
+}
 
 TRANSLATE['py'] = function (src, root) {
    const out = [];
@@ -411,11 +439,89 @@ TRANSLATE['py'] = function (src, root) {
    }
 
    function maybe_indent(level) {
-      if (level > 0 && out[out.length-1] == '\n') {
+      if (level >= 0 && out[out.length-1] == '\n') {
          out.push(' '.repeat(level));
       }
    }
-   function for_block(info, block) {
+
+   const FORMATTER = {
+      'comment': s => s.comment,
+      'for': s => `for ${s.ident.name} in ${s.text}:`,
+   };
+
+   function emit_node(block, cur, out, formatter) {
+      switch (cur.constructor.name) {
+      case 'ParseNewline':
+         out.push('\n');
+         break;
+      case 'ParseComment':
+         if (out[out.length-1] != '\n') {
+            out.push(' ');
+         }
+         out.push(formatter.comment(s));
+         break;
+      case 'ParseAssign':
+         maybe_indent(block.level);
+         switch (s.left.constructor.name) {
+         case 'ParseDecl':
+            out.push(s.left.name);
+            break;
+         case 'ParseExpr':
+            for_expr(s.left);
+            break;
+         default:
+            throw s.left.constructor.name;
+         }
+         if (s.right) {
+            out.push(' = ');
+            for_expr(s.right);
+         }
+         break;
+      case 'ParseExpr':
+         maybe_indent(block.level);
+         //console.log('ParseExpr', s.text);
+         for_expr(s);
+         break;
+      case 'ParseDecl':
+         maybe_indent(block.level);
+         out.push(name);
+         break;
+      case 'ParseDef':
+         maybe_indent(block.level);
+         out.push('def ', s.name, '(');
+         for (const arg of s.args) {
+            out.push(arg.name);
+         }
+         out.push('): '); // Poor guy is sad without a static type!
+         per_block('def', s.block);
+         break;
+      case 'ParseFor':
+         maybe_indent(block.level);
+         out.push('for ', s.ident, ' in ');
+         per_block(s.expr);
+         out.push(': ');
+         for_block('for', s.block);
+         break;
+      case 'ParseCondition':
+         maybe_indent(block.level);
+         out.push(s.cmd, ' ');
+         for_expr(s.expr);
+         out.push(': ');
+         per_block(s.cmd, s.block);
+         break;
+      case 'ParseElse':
+         maybe_indent(block.level);
+         out.push('else: ');
+         per_block('else', s.block);
+         break;
+      default:
+         throw s.constructor.name;
+      }
+   }
+
+
+
+   function per_block(info, block) {
       //console.log('for_block', {info, block});
 
       for (const s of block.statements) {
@@ -425,6 +531,9 @@ TRANSLATE['py'] = function (src, root) {
             out.push('\n');
             break;
          case 'ParseComment':
+            if (level > 0 && out[out.length-1] == '\n') {
+               out.push(' '.repeat(level));
+            }
             out.push(s.comment);
             break;
          case 'ParseAssign':
@@ -460,12 +569,12 @@ TRANSLATE['py'] = function (src, root) {
                out.push(arg.name);
             }
             out.push('): '); // Poor guy is sad without a static type!
-            for_block('def', s.block);
+            per_block('def', s.block);
             break;
          case 'ParseFor':
             maybe_indent(block.level);
             out.push('for ', s.ident, ' in ');
-            for_expr(s.expr);
+            per_block(s.expr);
             out.push(': ');
             for_block('for', s.block);
             break;
@@ -474,12 +583,12 @@ TRANSLATE['py'] = function (src, root) {
             out.push(s.cmd, ' ');
             for_expr(s.expr);
             out.push(': ');
-            for_block(s.cmd, s.block);
+            per_block(s.cmd, s.block);
             break;
          case 'ParseElse':
             maybe_indent(block.level);
             out.push('else: ');
-            for_block('else', s.block);
+            per_block('else', s.block);
             break;
          default:
             throw s.constructor.name;
@@ -491,6 +600,76 @@ TRANSLATE['py'] = function (src, root) {
    return out.join('');
 };
 
+TRANSLATE['js'] = {
+   'for': (ident, expr) => {
+      const [matched, args] = expr.match(/range\((.+?)\)/);
+      if (matched) {
+         let [a,b,c,d] = args.split(',');
+         if (d) throw args;
+         if (b === undefined) {
+            b = a;
+            a = 0;
+         }
+         if (c) {
+            c = ` += ${c}`;
+         } else {
+            c = `++`;
+         }
+         return `for (let ${ident} = ${a}; ${ident} < ${b}; ${ident}${c})`;
+      }
+      return `for (let ${ident} of ${expr})`;
+   },
+   'else': () => 'else',
+   'condition': (cmd, expr) => {
+      return `${cmd} (${expr})`;
+   },
+   'def': (name, args) => {
+      return `function ${name}(${args.join(', ')})`;
+   }
+   'comment': (text) => text.replace('#', '//'),
+   'assign': (left, right) => {
+      if (right == 'dict()' || right == 'set()') {
+         right = '{}';
+      }
+      return `${left} = ${right}`;
+   },
+}
+
+TRANSLATE['cpp'] = {
+   'for': (ident, expr) => {
+      const [matched, args] = expr.match(/range\((.+?)\)/);
+      if (matched) {
+         let [a,b,c,d] = args.split(',');
+         if (d) throw args;
+         if (b === undefined) {
+            b = a;
+            a = 0;
+         }
+         if (c) {
+            c = ` += ${c}`;
+         } else {
+            c = `++`;
+         }
+         return `for (auto ${ident} = ${a}; ${ident} < ${b}; ${ident}${c})`;
+      }
+      // This should be either const auto& or auto&, and we have to infer!
+      return `for (const auto& ${ident} : ${expr})`;
+   },
+   'else': () => 'else',
+   'condition': (cmd, expr) => {
+      return `${cmd} (${expr})`;
+   },
+   'def': (name, args, ret_type) => {
+      return `ret_type ${name}(${args.join(', ')})`;
+   }
+   'comment': (text) => text.replace('#', '//'),
+   'assign': (left, right) => {
+      if (right == 'dict()' || right == 'set()' || right == '[]') {
+         right = '{}';
+      }
+      return `${left} = ${right}`;
+   },
+}
 
 function compile() {
    const src = e_src.textContent;
