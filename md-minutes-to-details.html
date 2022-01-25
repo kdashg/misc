@@ -23,6 +23,10 @@
 
 * ipsum
 
+### Example [3](example.com/3) (stuff)
+
+* dolor
+
 
 ## H2 again
 </textarea>
@@ -90,26 +94,39 @@ function* range(n) {
    }
 }
 
-const RE_H1_TITLE = /# WGSL (\d\d\d\d-\d\d-\d\d) Minutes/;
-function get_date(h1_title) {
-   const match = h1_title.match(RE_H1_TITLE);
-   if (!match) throw 'h1_title.match(RE_TITLE) failed';
-   const date = match[1];
-   return date;
+function trimPrefix(str, prefix) {
+   if (str.startsWith(prefix)) {
+      str = str.slice(prefix.length);
+   }
+   return str;
 }
-if (get_date('# WGSL 2021-04-13 Minutes') != '2021-04-13') throw 'get_date';
+function withoutPrefix(str, prefix) {
+   const ret = trimPrefix(str, prefix);
+   if (ret == str) throw {str, prefix};
+   return ret;
+}
 
-function to_github_anchor_slug(text) {
+const RE_DATE = /\d\d\d\d-\d\d-\d\d/;
+function find_date(str) {
+   const match = str.match(RE_DATE) || [];
+   return match;
+}
+if (find_date('# WGSL 2021-04-13 Minutes') != '2021-04-13') throw 'find_date';
+
+function to_github_url_slug(text) {
    let parts = text.split(/ +/);
    parts = parts.map(s => {
       s = s.toLowerCase();
-      s = [].filter.call(s, c => {
-         if (c.match(/[0-9A-Za-z-_]/)) return c;
-         return '';
-      }).join('');
+      s = [].filter.call(s, c => c.match(/[0-9A-Za-z-_()]/));
+      s = s.join('');
       return s;
    });
    return parts.join('-');
+}
+function to_github_anchor_slug(text) {
+   let ret = to_github_url_slug(text);
+   ret = ret.replaceAll(/[()]/g, '');
+   return ret;
 }
 
 {
@@ -118,24 +135,25 @@ function to_github_anchor_slug(text) {
    const was = to_github_anchor_slug(title);
    if (was != expected) throw was;
 }
+{
+   const title = 'Triage the issues without milestones (timebox 15m).';
+   const expected = 'triage-the-issues-without-milestones-timebox-15m';
+   const was = to_github_anchor_slug(title);
+   if (was != expected) throw was;
+}
 
-const RE_H3_TITLE_URL = /### \[(.*)\]\((.*)\)/;
+const RE_URL = /\[(.*)\]\((.*?)\)/g;
 
 function section_desc(h3_section) {
-   const h3_title = h3_section.title;
-   const m = h3_title.match(RE_H3_TITLE_URL);
-   if (!m) {
-      const section_title = h3_title.slice('### '.length);
-      return {
-         slug: to_github_anchor_slug(section_title),
-         text: h3_section.children.join('\n'),
-      };
-   }
-   const section_title = m[1];
+   const section_title = withoutPrefix(h3_section.title, '### ');
+   const found = Array.from(section_title.matchAll(RE_URL));
+   const issue_url = (found[0] || [])[2];
+   const title_text = section_title.replaceAll(RE_URL, '$1');
+   const slug = to_github_anchor_slug(title_text);
 
    return {
-      issue_url: m[2],
-      slug: to_github_anchor_slug(section_title),
+      issue_url,
+      slug,
       text: h3_section.children.join('\n'),
    };
 }
@@ -179,10 +197,14 @@ function extract_minutes() {
       throw tree.children;
    })();
    console.log('tree', tree);
-   const date = get_date(h1.title);
-   date.defined;
 
-   const wiki_url = `https://github.com/gpuweb/gpuweb/wiki/WGSL-${date}-Minutes`;
+   const date = find_date(h1.title);
+   date.defined;
+   console.assert(h1.title.startsWith('# '));
+   let page_name = h1.title.slice(2);
+   page_name = to_github_url_slug(page_name);
+
+   const wiki_url = `https://github.com/gpuweb/gpuweb/wiki/${page_name}`;
 
    while (e_out.firstChild) {
       e_out.removeChild(e_out.firstChild);
