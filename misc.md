@@ -9,17 +9,21 @@ set detach-on-fork off
 set print inferior-events on
 set schedule-multiple on
 set non-stop on
-set target-async on
+set mi-async on
 
 set pagination off
-set auto-solib-add off
 
+set auto-solib-add off
 handle SIGSYS noprint nostop pass
 ```
 
-This is enough to have gdb attach to all forks and continue.
-I also disable eager symbol loading via `auto-solib-add` because it's very slow for Gecko.
-Gecko also generates a lot of SIGSYS that it expects to be able to handle, but by default gdb intercepts these and panics.
+This is enough to have gdb attach to all forks and continue!
+
+I do disable eager symbol loading via `auto-solib-add off` because it's very slow for Gecko. (It can take minutes extra to start)
+You will need to use `share xul` to load symbols for xul manually, once you hit your crash.
+If you want to break on symbol breakpoints, you probably have to remove this line.
+
+Gecko also generates a lot of SIGSYS that it expects to be able to handle, but by default gdb intercepts these and panics, so we tell it to `noprint nostop pass`.
 
 ### Example usage
 
