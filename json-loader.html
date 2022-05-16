@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <meta charset=utf-8>
+   </head>
+   <body>
+<pre>`window.<input id=e_var_name type=text value=json
+> = JSON.parse(<input id=e_file type=file accept='.json'
+                onchange='file_input_changed(this.files[0])'/>);`</pre>
+Status: <span id=e_status>-</span>
+
+<hr/>
+<script>
+
+class SplitLogger {
+   prefix = ''
+
+   constructor(desc) {
+      if (desc) {
+         this.prefix = desc + ' '
+      }
+      this.start = performance.now();
+      this.last_split = this.start;
+   }
+
+   log(text) {
+      let now = performance.now();
+      const split_diff = now - this.last_split;
+      const total_diff = now - this.start;
+      console.log(`[${this.prefix}${split_diff|0}/${total_diff|0}ms]`, text);
+      this.last_split = now;
+   }
+};
+
+// -
+
+function suffix_scaled(val) {
+   const SUFFIX_LIST = ['n', 'u', 'm', '', 'K', 'M', 'G', 'T'];
+   const UNSCALED_SUFFIX = SUFFIX_LIST.indexOf('');
+   let tier = Math.floor((Math.log10(val) / 3));
+   tier += UNSCALED_SUFFIX;
+   tier = Math.max(0, Math.min(tier, SUFFIX_LIST.length-1));
+   tier -= UNSCALED_SUFFIX;
+   const tier_base = Math.pow(1000, tier);
+   return [val / tier_base, SUFFIX_LIST[tier + UNSCALED_SUFFIX]];
+}
+
+function to_suffixed(val, fixed) {
+   const [scaled, suffix] = suffix_scaled(val);
+   if (!suffix) return val;
+
+   if (fixed === undefined) {
+      fixed = 2 - (Math.log10(scaled) | 0);
+   }
+   return `${scaled.toFixed(fixed)}${suffix}`;
+}
+
+// -
+
+async function file_input_changed(blob) {
+   const slog = new SplitLogger('file_input_changed');
+
+   e_status.textContent = 'Reading...';
+   let text = await blob.text();
+   slog.log(`Read ${to_suffixed(text.length)} chars.`);
+
+   e_status.textContent = 'Parsing...';
+   if (window.strip_json_comments) {
+      text = text.replace(/\n *\/\/.*/g, '\n'); // Strip (non-spec) json comments
+   }
+   const json = JSON.parse(text);
+   slog.log('Parsed.');
+
+   const var_name = e_var_name.value;
+   window[var_name] = json;
+   e_status.textContent = `\`window.${var_name}\` ready in web console!`;
+   console.log(`\`${var_name}\`:`, json);
+}
+
+</script>
+   </body>
+</html>
