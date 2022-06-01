@@ -130,14 +130,15 @@ It works fine if you start it as `python -i` though.
 ## My full `.bash_profile`
 ```bash
 cd /c/dev
+
 export VISUAL=vim
+
 if [ -n $MOZILLABUILD ]
 then
-  echo "Using mozilla-build's ssh for git"
-  export GIT_SSH_COMMAND=/bin/ssh
+  echo "Fixing mozilla-build-4.0's git+ssh to use Windows's OpenSSH"
+  export GIT_SSH_COMMAND=`which ssh`
+  # Yes, e.g. `GIT_SSH_COMMAND= git fetch` fails somehow.
 fi
-
-export PATH="$PATH:/c/Program Files/nodejs"
 
 eval `ssh-agent`
 ssh-add ~/.ssh/jdashg-4096.priv
