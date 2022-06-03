@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>color_quads.html</title>
+  </head>
+  <body>
+    <div id="e_settings">
+      Canvas Width: <input id="e_width" type="text" value="400">
+      <br>Canvas Height: <input id="e_height" type="text" value="400">
+      <br>Canvas Colorspace: <input id="e_cspace" type="text">
+      <br>Canvas Context Type: <select id="e_context">
+        <option value="2d" selected="selected">Canvas2D</option>
+        <option value="webgl">WebGL</option>
+      </select>
+
+      <br>
+      <br>OuterTopLeft: <input id="e_color_o1" type="text" value="rgb(0,0,0)">
+      <br>OuterTopRight: <input id="e_color_o2" type="text" value="rgb(16,16,16)">
+      <br>OuterBottomLeft: <input id="e_color_o3" type="text" value="rgb(235,235,235)">
+      <br>OuterBottomRight: <input id="e_color_o4" type="text" value="rgb(255,255,255)">
+      <br>
+      <br>InnerTopLeft: <input id="e_color_i1" type="text" value="rgb(127,0,0)">
+      <br>InnerTopRight: <input id="e_color_i2" type="text" value="rgb(0,127,0)">
+      <br>InnerBottomLeft: <input id="e_color_i3" type="text" value="rgb(0,0,127)">
+      <br>InnerBottomRight: <input id="e_color_i4" type="text" value="rgb(127,127,127)">
+      <br><input id="e_publish" type="button" value="Publish">
+      <hr>
+    </div>
+    <div id="e_canvas_holder"><canvas></canvas></div>
+    <script>
+"use strict";
+
+/*
+# color_quads.html
+
+* The default is a 400x400 image, with 0, 16, 235, and 255 "gray" outer
+  quads, and 50%-red, -green, -blue, and -gray inner quads.
+
+* We default to showing the settings pane when loaded without a query string.
+  This way, someone naively opens this in a browser, they can immediately see
+  all available options.
+
+* The "Publish" button updates the url, and so causes the settings pane to
+  hide.
+
+* Clicking on the canvas toggles the settings pane for further editing.
+*/
+
+// -
+
+// Click the canvas to toggle the settings pane.
+e_canvas_holder.addEventListener("click", () => {
+  // Toggle display:none to hide/unhide.
+  e_settings.style.display = e_settings.style.display ? "" : "none";
+});
+
+// Hide settings initially if there's a query string in the url.
+if (window.location.search.startsWith("?")) {
+  e_settings.style.display = "none";
+}
+
+// -
+
+const SETTING_NODES = {};
+e_settings.childNodes.forEach(n => {
+  if (!n.id) return;
+  SETTING_NODES[n.id] = n;
+  n._default = n.value;
+});
+
+const URL_PARAMS = new URLSearchParams(window.location.search);
+URL_PARAMS.forEach((v,k) => {
+  const n = SETTING_NODES[k];
+  if (!n) {
+    if (k) {
+      console.warn("Unrecognized setting: " + k);
+    }
+    return;
+  }
+  n.value = v;
+});
+
+// -
+
+let e_canvas;
+
+function draw() {
+  while (e_canvas_holder.firstChild) {
+    e_canvas_holder.removeChild(e_canvas_holder.firstChild);
+  }
+  const e_canvas = e_canvas_holder.appendChild(document.createElement("canvas"));
+
+  const options = {
+    colorSpace: e_cspace.value || undefined,
+  };
+  const context = e_canvas.getContext(e_context.value, options);
+
+  // -
+
+  const W = parseInt(e_width.value);
+  const H = parseInt(e_height.value);
+  context.canvas.width = W;
+  context.canvas.height = H;
+
+  // -
+
+  let fillFromElem;
+  if (context.fillRect) {
+    const c2d = context;
+    fillFromElem = (e, left, top, w, h) => {
+      if (!e.value) return;
+      c2d.fillStyle = e.value;
+      c2d.fillRect(left, top, w, h);
+    };
+  } else if (context.drawArrays) {
+    const gl = context;
+    gl.enable(gl.SCISSOR_TEST);
+    gl.disable(gl.DEPTH_TEST);
+    fillFromElem = (e, left, top, w, h) => {
+      if (!e.value) return;
+      const val = e.value.trim().slice("rgb(".length, -(")".length)); // Really should be a regex.
+      const rgba = val.split(",").map(s => parseFloat(s));
+      rgba[0] /= 255;
+      rgba[1] /= 255;
+      rgba[2] /= 255;
+      if (rgba.length == 3) {
+        rgba.push(1.0);
+      }
+      const bottom = top+h; // in y-down c2d coords
+      gl.scissor(left, gl.drawingBufferHeight - bottom, w, h);
+      gl.clearColor(...rgba);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    };
+  }
+
+  // -
+
+  fillFromElem(e_color_o1, 0  , 0  , W/2, H/2);
+  fillFromElem(e_color_o2, W/2, 0  , W/2, H/2);
+  fillFromElem(e_color_o3, 0  , H/2, W/2, H/2);
+  fillFromElem(e_color_o4, W/2, H/2, W/2, H/2);
+
+  // -
+
+  const INNER_SCALE = 1/4;
+
+  fillFromElem(e_color_i1, W/2-W*INNER_SCALE, H/2-H*INNER_SCALE, W*INNER_SCALE, H*INNER_SCALE);
+  fillFromElem(e_color_i2, W/2              , H/2-H*INNER_SCALE, W*INNER_SCALE, H*INNER_SCALE);
+  fillFromElem(e_color_i3, W/2-W*INNER_SCALE, H/2              , W*INNER_SCALE, H*INNER_SCALE);
+  fillFromElem(e_color_i4, W/2              , H/2              , W*INNER_SCALE, H*INNER_SCALE);
+}
+
+draw();
+
+// -
+
+Object.values(SETTING_NODES).forEach(x => {
+  x.addEventListener("change", draw);
+});
+
+e_publish.addEventListener("click", () => {
+  let settings = [];
+  for (const n of Object.values(SETTING_NODES)) {
+    if (n.value == n._default) continue;
+    settings.push(`${n.id}=${n.value}`);
+  }
+  settings = settings.join("&");
+  if (!settings) {
+    settings = "="; // Empty key-value pair is "publish with default settings"
+  }
+  window.location.search = "?" + settings;
+});
+    </script>
+  </body>
+</html>
