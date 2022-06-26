@@ -89,12 +89,15 @@ function draw() {
   while (e_canvas_holder.firstChild) {
     e_canvas_holder.removeChild(e_canvas_holder.firstChild);
   }
-  const e_canvas = e_canvas_holder.appendChild(document.createElement("canvas"));
+  e_canvas = e_canvas_holder.appendChild(document.createElement("canvas"));
 
   const options = {
     colorSpace: e_cspace.value || undefined,
   };
   const context = e_canvas.getContext(e_context.value, options);
+  if (context.drawingBufferColorSpace && options.colorSpace) {
+    context.drawingBufferColorSpace = options.colorSpace;
+  }
 
   // -
 
