@@ -312,3 +312,17 @@ Key issues with pacman? Reinstall archlinux-keyring separately: `pacman -S archl
 ## Minimal Firefox subdir rebuilds
 
 `./mach build install-manifests && ./mach build dom/canvas`
+
+## ssh w/agent failure `channel 1: chan_shutdown_read: shutdown() failed for fd 7 [i0 o0]: Not a socket`
+
+I get this when using agent forwarding, originating from a Windows machine.
+
+ssh -vvv failures:
+```
+channel 1: chan_shutdown_read: shutdown() failed for fd 7 [i0 o0]: Not a socket
+debug2: get_agent_identities: ssh_agent_bind_hostkey: communication with agent failed
+debug1: get_agent_identities: ssh_fetch_identitylist: communication with agent failed
+```
+
+I fixed this by installing an update to OpenSSL from e.g. here:
+https://github.com/PowerShell/Win32-OpenSSH/releases/tag/v8.9.1.0p1-Beta
