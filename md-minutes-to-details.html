@@ -147,22 +147,50 @@ function to_github_anchor_slug(text) {
 
 const RE_URL = /\[(.*)\]\((.*?)\)/g;
 
-function section_desc(h3_section) {
-   const section_title = withoutPrefix(h3_section.title, '### ');
+function section_desc(node) {
+   if (!node.title.startsWith('#')) throw node.title;
+   const section_title = node.title.replace(/#+ /, '');
    const found = Array.from(section_title.matchAll(RE_URL));
    const issue_url = (found[0] || [])[2];
    const title_text = section_title.replaceAll(RE_URL, '$1');
    const slug = to_github_anchor_slug(title_text);
 
-   return {
+   // -
+   // A section's `children` contain, zero or more string children, followed
+   // by zero or more subsection children.
+
+   let content = [];
+   let subsections = [];
+   for (const child of node.children) {
+      if (child.h_level) { // section
+         subsections.push(child);
+      } else {
+         if (subsections.length) throw node;
+         content.push(child);
+      }
+   }
+   content = content.join('\n');
+   content = content.replace(/^\n+/, '');
+   content = content.replace(/\n+$/, '');
+
+   // -
+
+   const ret = {
       issue_url,
       slug,
-      text: h3_section.children.join('\n'),
+      content,
+      subsections,
    };
+   if (!ret.content) delete ret.content;
+   if (!ret.subsections.length) delete ret.subsections;
+   return ret;
 }
 
+// -
+// Tests
+
 {
-   const text = `\
+   const content = `\
 
 
 *   DM: Do we want to spend innovation budget on anonymous structs here?
@@ -171,21 +199,25 @@ function section_desc(h3_section) {
    const h3_section = {
       title: '### [[wgsl] Proposal: Remove pointer out parameters from modf, frexp · Issue #1480 · gpuweb/gpuweb](https://github.com/gpuweb/gpuweb/issues/1480)',
       h_level: 3,
-      children: text.split('\n'),
+      children: content.split('\n'),
    };
    const expected = {
       issue_url: 'https://github.com/gpuweb/gpuweb/issues/1480',
       slug: 'wgsl-proposal-remove-pointer-out-parameters-from-modf-frexp--issue-1480--gpuwebgpuweb',
-      text: text,
+      content: content.trim(),
    };
    const was = section_desc(h3_section);
-   if (JSON.stringify(expected) != JSON.stringify(was)) throw was;
+   if (JSON.stringify(expected) != JSON.stringify(was)) throw {was, expected};
 }
+
+// -
 
 function make_details(date, wiki_url, desc) {
    return `\
 <details><summary><a href="${wiki_url}#${desc.slug}">WGSL meeting minutes ${date}</a></summary>
-${desc.text}
+
+${desc.content}
+
 </details>`;
 }
 
@@ -213,36 +245,41 @@ function extract_minutes() {
       e_out.removeChild(e_out.firstChild);
    }
 
-   function f(cur) {
-      if (cur.h_level === undefined) return; // A string, not a section.
-      if (cur.h_level != 3) {
-         for (const child of cur.children) {
-            f(child);
+   function per_section_node(cur) {
+      if (cur.h_level === undefined) return; // A string, not a section: Don't recurse.
+
+      const section = section_desc(cur);
+      console.log(section);
+
+      if (section.content) {
+         const details = make_details(date, wiki_url, section);
+         e_out.appendChild(document.createElement('br'));
+         const out = e_out.appendChild(document.createElement('div'));
+
+         let e_section_title;
+         if (section.issue_url) {
+            e_section_title = out.appendChild(document.createElement('a'));
+            e_section_title.href = section.issue_url;
+         } else {
+            e_section_title = out.appendChild(document.createElement('span'));
          }
-         return;
+         e_section_title.textContent = cur.title;
+
+         out.appendChild(document.createElement('br'));
+         const e_details = out.appendChild(document.createElement('pre'));
+         e_details.style.border = '1px solid black';
+         e_details.textContent = details;
       }
-      const desc = section_desc(cur);
-      //console.log(desc);
 
-      const details = make_details(date, wiki_url, desc);
-      e_out.appendChild(document.createElement('br'));
-      const out = e_out.appendChild(document.createElement('div'));
+      // -
 
-      let e_section_title;
-      if (desc.issue_url) {
-         e_section_title = out.appendChild(document.createElement('a'));
-         e_section_title.href = desc.issue_url;
-      } else {
-         e_section_title = out.appendChild(document.createElement('span'));
+      if (section.subsections) {
+         for (const sub of section.subsections) {
+            per_section_node(sub);
+         }
       }
-      e_section_title.textContent = cur.title;
-
-      out.appendChild(document.createElement('br'));
-      const e_details = out.appendChild(document.createElement('pre'));
-      e_details.style.border = '1px solid black';
-      e_details.textContent = details;
    }
-   f(tree);
+   per_section_node(h1);
 }
 
 e_extract.addEventListener('click', extract_minutes, false);
