@@ -12,11 +12,11 @@
 
 # WGSL 2021-00-00 Minutes
 
-## H2
-
 ### Example 1
 
 * lorem
+
+## H2
 
 
 ### [Example 2](example.com)
@@ -78,12 +78,12 @@ function md_to_tree(text) {
       while (cur_sec.h_level > parent_h_level) {
          cur_sec = cur_sec.parent;
       }
-      while (cur_sec.h_level < parent_h_level) {
-         const dummy = new MdSection('#'.repeat(cur_sec.h_level + 1));
-         dummy.title = undefined;
-         cur_sec.add_child(dummy);
-         cur_sec = dummy;
-      }
+      //while (cur_sec.h_level < parent_h_level) {
+      //   const dummy = new MdSection('#'.repeat(cur_sec.h_level + 1));
+      //   dummy.title = undefined;
+      //   cur_sec.add_child(dummy);
+      //   cur_sec = dummy;
+      //}
 
       cur_sec.add_child(new_sec);
       cur_sec = new_sec;
@@ -148,12 +148,16 @@ function to_github_anchor_slug(text) {
 const RE_URL = /\[(.*)\]\((.*?)\)/g;
 
 function section_desc(node) {
-   if (!node.title.startsWith('#')) throw node.title;
-   const section_title = node.title.replace(/#+ /, '');
-   const found = Array.from(section_title.matchAll(RE_URL));
-   const issue_url = (found[0] || [])[2];
-   const title_text = section_title.replaceAll(RE_URL, '$1');
-   const slug = to_github_anchor_slug(title_text);
+   let issue_url;
+   let slug;
+   if (node.title) {
+      if (!node.title.startsWith('#')) throw node.title;
+      const section_title = node.title.replace(/#+ /, '');
+      const found = Array.from(section_title.matchAll(RE_URL));
+      issue_url = (found[0] || [])[2];
+      const title_text = section_title.replaceAll(RE_URL, '$1');
+      slug = to_github_anchor_slug(title_text);
+   }
 
    // -
    // A section's `children` contain, zero or more string children, followed
@@ -224,19 +228,19 @@ ${desc.content}
 function extract_minutes() {
    const text = e_in.value;
    const tree = md_to_tree(text);
+   console.log('tree', tree);
 
-   const h1 = (() => {
+   const first_titled = (() => {
       for (const x of tree.children) {
          if (x.title) return x;
       }
       throw tree.children;
    })();
-   console.log('tree', tree);
 
-   const date = find_date(h1.title);
+   const date = find_date(first_titled.title);
    date.defined;
-   console.assert(h1.title.startsWith('# '));
-   let page_name = h1.title.slice(2);
+   console.assert(first_titled.title.startsWith('# '));
+   let page_name = first_titled.title.slice(2);
    page_name = to_github_url_slug(page_name);
 
    const wiki_url = `https://github.com/gpuweb/gpuweb/wiki/${page_name}`;
@@ -279,7 +283,7 @@ function extract_minutes() {
          }
       }
    }
-   per_section_node(h1);
+   per_section_node(tree);
 }
 
 e_extract.addEventListener('click', extract_minutes, false);
