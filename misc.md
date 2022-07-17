@@ -2,6 +2,8 @@
 
 ## `gdb` Auto-Attach to All Child Processes
 
+Shoutout to jimb for contributions to .gdbinit!
+
 ### `.gdbinit`
 
 ```
