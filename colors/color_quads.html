@@ -1,8 +1,23 @@
 <!DOCTYPE html>
 <html>
+  <!--
+# color_quads.html
+
+* The default is a 400x400 2d canvas, with 0, 16, 235, and 255 "gray" outer
+  quads, and 50%-red, -green, -blue, and -gray inner quads.
+
+* We default to showing the settings pane when loaded without a query string.
+  This way, someone naively opens this in a browser, they can immediately see
+  all available options.
+
+* The "Publish" button updates the url, and so causes the settings pane to
+  hide.
+
+* Clicking on the canvas toggles the settings pane for further editing.
+  -->
   <head>
     <meta charset="utf-8">
-    <title>color_quads.html</title>
+    <title>color_quads.html (2022-07-15)</title>
   </head>
   <body>
     <div id="e_settings">
@@ -13,6 +28,7 @@
         <option value="2d" selected="selected">Canvas2D</option>
         <option value="webgl">WebGL</option>
       </select>
+      <br>Canvas Context Options: <input id="e_options" type="text" value="{}">
 
       <br>
       <br>OuterTopLeft: <input id="e_color_o1" type="text" value="rgb(0,0,0)">
@@ -30,22 +46,6 @@
     <div id="e_canvas_holder"><canvas></canvas></div>
     <script>
 "use strict";
-
-/*
-# color_quads.html
-
-* The default is a 400x400 image, with 0, 16, 235, and 255 "gray" outer
-  quads, and 50%-red, -green, -blue, and -gray inner quads.
-
-* We default to showing the settings pane when loaded without a query string.
-  This way, someone naively opens this in a browser, they can immediately see
-  all available options.
-
-* The "Publish" button updates the url, and so causes the settings pane to
-  hide.
-
-* Clicking on the canvas toggles the settings pane for further editing.
-*/
 
 // -
 
@@ -73,13 +73,63 @@ const URL_PARAMS = new URLSearchParams(window.location.search);
 URL_PARAMS.forEach((v,k) => {
   const n = SETTING_NODES[k];
   if (!n) {
-    if (k) {
-      console.warn("Unrecognized setting: " + k);
+    if (k && !k.startsWith('__')) {
+      console.warn(`Unrecognized setting: ${k} = ${v}`);
     }
     return;
   }
   n.value = v;
 });
+
+// -
+
+function UNITTEST_STR_EQ(was, expected) {
+  function to_result(src) {
+    let result = src;
+    if (typeof(result) == 'string') {
+      result = eval(result);
+    }
+    let result_str = result.toString();
+    if (result instanceof Array) {
+      result_str = '[' + result_str + ']';
+    }
+    return {src, result, result_str};
+  }
+  was = to_result(was);
+  expected = to_result(expected);
+
+  if (false) {
+    if (was.result_str != expected.result_str) {
+      throw {was, expected};
+    }
+    console.log(`[unittest] OK `, was.src, ` ->  ${was.result_str}  (`, expected.src, `)`);
+  }
+  console.assert(was.result_str == expected.result_str,
+    was.src, ` ->  ${was.result_str}  (`, expected.src, `)`);
+}
+
+// -
+
+/// Non-Premult-Alpha, e.g. [1.0, 1.0, 1.0, 0.5]
+function parse_css_color_npa(str) {
+  const m = /(rgba?)\((.*)\)/.exec(str);
+  if (!m) throw str;
+
+  let vals = m[2];
+  vals = vals.split(',').map(s => parseFloat(s));
+  if (vals.length == 3) {
+    vals.push(1.0);
+  }
+  for (let i = 0; i < 3; i++) {
+    vals[i] /= 255;
+  }
+  return vals;
+}
+UNITTEST_STR_EQ(`parse_css_color_npa('rgb(255,255,255)');`, [1,1,1,1]);
+UNITTEST_STR_EQ(`parse_css_color_npa('rgba(255,255,255)');`, [1,1,1,1]);
+UNITTEST_STR_EQ(`parse_css_color_npa('rgb(20,40,60)');`, '[20/255, 40/255, 60/255, 1]');
+UNITTEST_STR_EQ(`parse_css_color_npa('rgb(20,40,60,0.5)');`, '[20/255, 40/255, 60/255, 0.5]');
+UNITTEST_STR_EQ(`parse_css_color_npa('rgb(20,40,60,0)');`, '[20/255, 40/255, 60/255, 0]');
 
 // -
 
@@ -91,13 +141,17 @@ function draw() {
   }
   e_canvas = e_canvas_holder.appendChild(document.createElement("canvas"));
 
-  const options = {
-    colorSpace: e_cspace.value || undefined,
-  };
+  let options = eval(`Object.assign(${e_options.value})`);
+  options.colorSpace = e_cspace.value || undefined;
+
   const context = e_canvas.getContext(e_context.value, options);
   if (context.drawingBufferColorSpace && options.colorSpace) {
     context.drawingBufferColorSpace = options.colorSpace;
   }
+  if (context.getContextAttributes) {
+    options = context.getContextAttributes();
+  }
+  console.log({options});
 
   // -
 
@@ -116,20 +170,20 @@ function draw() {
       c2d.fillStyle = e.value;
       c2d.fillRect(left, top, w, h);
     };
+
   } else if (context.drawArrays) {
     const gl = context;
     gl.enable(gl.SCISSOR_TEST);
     gl.disable(gl.DEPTH_TEST);
     fillFromElem = (e, left, top, w, h) => {
       if (!e.value) return;
-      const val = e.value.trim().slice("rgb(".length, -(")".length)); // Really should be a regex.
-      const rgba = val.split(",").map(s => parseFloat(s));
-      rgba[0] /= 255;
-      rgba[1] /= 255;
-      rgba[2] /= 255;
-      if (rgba.length == 3) {
-        rgba.push(1.0);
+      const rgba = parse_css_color_npa(e.value.trim());
+      if (false && options.premultipliedAlpha) {
+        for (let i = 0; i < 3; i++) {
+          rgba[i] *= rgba[3];
+        }
       }
+
       const bottom = top+h; // in y-down c2d coords
       gl.scissor(left, gl.drawingBufferHeight - bottom, w, h);
       gl.clearColor(...rgba);
