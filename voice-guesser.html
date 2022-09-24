@@ -78,12 +78,10 @@ async function toggle() {
 
       const SOFT_BLUE = '#5bcffa';
       const SOFT_PINK = '#f5abb9';
-      //document.body.style.width = '50vw';
-      //document.body.style.height = '50vh';
       document.body.style.backgroundColor =
          `color-mix(in srgb, ${SOFT_PINK} ${femme_percent}%, ${SOFT_BLUE})`;
 
-      set_text(`femme: ${femme.toFixed(2)} @ ${root.freq}Hz (${root.db|0}db)`);
+      set_text(`femme: ${femme.toFixed(2)} @ ${root.freq|0}Hz (${root.db|0}db)`);
    }
    ac.close();
    set_text('stopped');
