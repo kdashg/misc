@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset=utf-8>
+</head>
+<body>
+<h1 id=e_text>[click to start]</h1>
+<script>
+
+let active = false;
+
+function reset() {
+   document.body.style.backgroundColor = '#aaa';
+}
+reset();
+
+function set_text(text) {
+   e_text.textContent = `[${text}]`;
+   console.log(e_text.textContent);
+}
+
+async function toggle() {
+   if (active) {
+      active = false;
+      set_text('stopping...');
+      return;
+   }
+   active = true;
+   set_text('starting...');
+
+   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+   const ac = new AudioContext();
+   const mss = ac.createMediaStreamSource(stream);
+   const an = new AnalyserNode(ac);
+   an.fftSize = 2048 * 4;
+   an.smoothingTimeConstant = 0.6;
+   mss.connect(an);
+   const freq_interval = (1 / (an.frequencyBinCount - 1)) * (ac.sampleRate / 2);
+
+   const MAX_FREQ = 1000;
+   const max_bins_needed = Math.ceil(MAX_FREQ / freq_interval);
+
+   const freqs = new Float32Array(max_bins_needed);
+   console.log({fftSize: an.fftSize, freq_interval, max_bins_needed});
+   while (active) {
+      await new Promise(go => setTimeout(go, 300));
+      an.getFloatFrequencyData(freqs);
+      let kv_list = Object.entries(freqs).map(([i, db]) => {
+         const freq = i * freq_interval;
+         return { freq, db };
+      });
+      //kv_list = kv_list.filter(kv => kv[1] != -Infinity);
+      kv_list = kv_list.sort((a, b) => b.db - a.db);
+      //console.log(...kv_list.slice(0, 3));
+
+      const max_db = kv_list[0].db;
+      const ABS_CUTOFF = -50;
+      const REL_CUTOFF = -7;
+      const cutoff = Math.max(max_db + REL_CUTOFF, ABS_CUTOFF);
+      let signals = kv_list.filter(x => x.db >= cutoff);
+      if (!signals.length || signals.length > 10) {
+         //console.log('likely noise:', kv_list[0]);
+         continue;
+      }
+      signals = signals.sort((a, b) => a.freq - b.freq);
+      //console.log(signals.length, ':', ...signals);
+      const root = signals[0];
+
+      const MALE_RANGE = [85, 155];
+      const FEMALE_RANGE = [165, 255];
+      const CROSSOVER = (MALE_RANGE[1] + FEMALE_RANGE[0]) / 2
+      const RANGE = Math.min(MALE_RANGE[1] - MALE_RANGE[0],
+                                        FEMALE_RANGE[1] - FEMALE_RANGE[0]);
+
+      const femme = (root.freq - CROSSOVER) / (RANGE / 2);
+      //console.log({femme}, root);
+      const femme_percent = Math.max(0, Math.min(50 + 50 * femme, 100));
+
+      const SOFT_BLUE = '#5bcffa';
+      const SOFT_PINK = '#f5abb9';
+      //document.body.style.width = '50vw';
+      //document.body.style.height = '50vh';
+      document.body.style.backgroundColor =
+         `color-mix(in srgb, ${SOFT_PINK} ${femme_percent}%, ${SOFT_BLUE})`;
+
+      set_text(`femme: ${femme.toFixed(2)} @ ${root.freq}Hz (${root.db|0}db)`);
+   }
+   ac.close();
+   set_text('stopped');
+   reset();
+}
+
+document.addEventListener('click', toggle)
+</script>
+</body>
+</html>
