@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset='utf-8'>
+    </head>
+    <body>
+        <pre id=e_out></pre>
+        <script>
+
+/**
+ * crossCombine([{a:false},{a:true}], [{},{b:5}])
+ * -> [{a:false}, {a:true}, {a:false,b:5}, {a:true,b:5}]
+ */
+ function crossCombine(...args) {
+  function crossCombine2(listA, listB) {
+    const listC = [];
+    for (const a of listA) {
+      for (const b of listB) {
+        const c = Object.assign({}, a, b);
+        listC.push(c);
+      }
+    }
+    return listC;
+  }
+
+  let res = [{}];
+  while (args.length) {
+    const next = args.shift();
+    next[0].defined;
+    res = crossCombine2(res, next);
+  }
+  return res;
+}
+
+/// makeCombiner('foo', [5, 3]) -> [{foo: 5}, {foo: 3}]
+function makeCombiner(key, vals) {
+  const ret = [];
+  for (const val of vals) {
+      const cur = {};
+      cur[key] = val;
+      ret.push(cur);
+  }
+  return ret;
+}
+
+// -
+
+function test(adapter_opts) {
+  const c = document.createElement('canvas');
+  const d = {
+    powerPreference: power_pref,
+  };
+  const g = c.getContext('webgl', d);
+  const ext = g.getExtension('WEBGL_debug_renderer_info');
+  const r = g.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+  const elem = document.createElement('pre');
+  elem.innerText = `
+${JSON.stringify(d)}
+  => ${r}
+`.trim();
+  document.body.appendChild(elem);
+
+  const lc = g.getExtension('WEBGL_lose_context');
+  lc.loseContext();
+}
+
+const FEATURE_NAMES = [
+    "depth-clip-control",
+    "depth32float-stencil8",
+    "texture-compression-bc",
+    "texture-compression-etc2",
+    "texture-compression-astc",
+    "timestamp-query",
+    "indirect-first-instance",
+    "shader-f16",
+    "rg11b10ufloat-renderable",
+];
+
+(async () => {
+    const adapter_opts_set = crossCombine(
+        makeCombiner('powerPreference', ['low-power', undefined, 'high-performance']),
+        makeCombiner('forceFallbackAdapter', [false, true])
+    );
+    e_out.textContent += `navigator.gpu: ${navigator.gpu}`;
+    if (navigator.gpu) {
+        for (const ao of adapter_opts_set) {
+            e_out.textContent += `\n\nnavigator.gpu.requestAdapter(${JSON.stringify(ao)}) ->`;
+            window.a = await navigator.gpu.requestAdapter(ao);
+            console.log(a);
+            e_out.textContent += ` ${a}`;
+            e_out.textContent += `\na.isFallbackAdapter -> ${a.isFallbackAdapter}`;
+            let name = "undefined";
+            if (a.name !== undefined) {
+                name = `"${a.name}"`;
+            }
+            e_out.textContent += `\n(deprecated) a.name -> ${name}`; // Firefox still has this.
+
+            e_out.textContent += `\na.features:`;
+            for (const name of a.features.keys()) {
+                e_out.textContent += `\n   ` + name;
+            }
+            
+            e_out.textContent += `\na.limits:`;
+            let keys = Object.keys(a.limits.__proto__); // limits not directly enumerable?
+            for (const k of keys) {
+                const v = a.limits[k];
+                e_out.textContent += `\n   ${k}: ${v}`;
+            }
+
+            e_out.textContent += `\nrequestAdapterInfo()`;
+            if (a.requestAdapterInfo) {
+                // Firefox doesn't have this yet.
+                let info = await a.requestAdapterInfo();
+                e_out.textContent += ` -> ${JSON.stringify(info)}`;
+            } else {
+                e_out.textContent += ` not implemented`;
+            }
+        }
+    }
+    e_out.textContent += `\n\nDone!`;
+})();
+        </script>
+    </body>
+</html>
