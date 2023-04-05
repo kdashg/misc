@@ -1,30 +1,67 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset='UTF-8'>
+    <meta charset=utf-8>
 </head>
 <body>
-    <input id='input' type='file'>
+    <input id=e_input type=file>
     <br/>
-    <textarea id='output'></textarea>
+    <textarea id=e_output></textarea>
     <script>
 'use strict';
 
-var input = document.getElementById('input');
-var output = document.getElementById('output');
+e_output.style.width = '100%';
+e_output.style.height = '50em';
 
-input.addEventListener('change', function(e) {
-    if (!e.target.files.length) {
-        output.value = '';
-        return;
+async function async_dataurl_from_file(file) {
+    return await new Promise(go => {
+        const fr = new FileReader();
+        fr.addEventListener('load', function() {
+            go(this.result);
+        });
+        fr.readAsDataURL(file);
+    });
+}
+
+let CHARS_PER_PART = 50;
+let FORMAT_AS = 'js';
+
+e_input.addEventListener('change', async e => {
+    console.assert(e.target.files.length == 1);
+    if (CHARS_PER_PART < 1) throw {CHARS_PER_PART};
+
+    const file = e.target.files[0];
+
+    let name = file.name;
+    name = name.replaceAll(/[-.]/g, '_');
+    name = name.toUpperCase();
+
+    const durl = await async_dataurl_from_file(file);
+
+    let out = durl;
+    switch (FORMAT_AS) {
+    case 'raw':
+        break;
+    case 'js':
+        let remaining = durl;
+        let parts = [];
+        while (remaining) {
+            parts.push(remaining.slice(0, CHARS_PER_PART));
+            remaining = remaining.slice(CHARS_PER_PART);
+        }
+        parts = parts.join('\\\n');
+
+        out = `\
+const ${name} = \`\\
+${parts}\`; // ${durl.length} chars.
+`;
+        break;
+    default:
+        console.error({FORMAT_AS});
+        break;
     }
 
-    var file = e.target.files[0];
-    var fr = new FileReader();
-    fr.addEventListener('load', function() {
-        output.value = this.result;
-    });
-    fr.readAsDataURL(file);
+    e_output.value = out;
 });
 
     </script>
