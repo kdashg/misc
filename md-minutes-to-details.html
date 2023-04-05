@@ -33,8 +33,10 @@
 * sit amet
 
 </textarea>
+      <br>Override URL: <input type=url id=e_link_url style='width: 50%'></input>
+      <br>Override Title: <input type=text id=e_link_title style='width: 50%'></input>
+      <br><button id='e_extract'>Extract</button>
       <hr>
-      Minute details: <button id='e_extract'>Extract</button>
       <div id='e_out'></div>
       <script>
 'use strict';
@@ -227,9 +229,9 @@ function section_desc(node) {
 
 // -
 
-function make_details(page_title, wiki_url, desc) {
+function make_details(desc) {
    return `\
-<details><summary><a href="${wiki_url}#${desc.slug}">${page_title}</a></summary>
+<details><summary><a href="${e_link_url.value}#${desc.slug}">${e_link_title.value}</a></summary>
 
 ${desc.content}
 
@@ -248,13 +250,18 @@ function extract_minutes() {
       throw tree.children;
    })();
 
-   const date = find_date(first_titled.title);
-   date.defined;
    console.assert(first_titled.title.startsWith('# '));
    const page_title = first_titled.title.slice(2);
    const page_slug = to_github_page_slug(page_title);
 
    const wiki_url = `https://github.com/gpuweb/gpuweb/wiki/${page_slug}`;
+
+   if (!e_link_url.value) {
+      e_link_url.value = wiki_url;
+   }
+   if (!e_link_title.value) {
+      e_link_title.value = page_title;
+   }
 
    while (e_out.firstChild) {
       e_out.removeChild(e_out.firstChild);
@@ -267,7 +274,7 @@ function extract_minutes() {
       console.log(section);
 
       if (section.content) {
-         const details = make_details(page_title, wiki_url, section);
+         const details = make_details(section);
          e_out.appendChild(document.createElement('br'));
          const out = e_out.appendChild(document.createElement('div'));
 
