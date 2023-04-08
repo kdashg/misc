@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!--
+Copyright and related rights waived via CC0:
+https://creativecommons.org/publicdomain/zero/1.0/
+-->
+<html>
+<head>
+<meta charset=utf-8>
+<script src=fake-wake-lock.js></script>
+</head>
+<body>
+<h1 id=e_status></h1>
+<script>
+'use strict';
+
+let wake_lock = null;
+
+e_status.textContent = `wake_lock: ${wake_lock}`;
+
+if (true) {
+   document.addEventListener('click', async () => {
+      if (wake_lock) {
+         document.body.style.backgroundColor = 'red';
+         {
+            await wake_lock.release();
+            wake_lock = null;
+         }
+         document.body.style.backgroundColor = '';
+      } else {
+         document.body.style.backgroundColor = 'magenta';
+         {
+            wake_lock = await navigator.wakeLock.request('screen');
+         }
+         document.body.style.backgroundColor = 'cyan';
+      }
+      e_status.textContent = `wake_lock: ${wake_lock}`;
+   });
+}
+
+</script>
+</body>
+</html>
