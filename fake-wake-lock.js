@@ -8,7 +8,8 @@ By: Kelsey Gilbert
 'use strict';
 
 if (!navigator.fakeWakeLock) {
-   const TRACE = true;
+   const TRACE = false;
+   const WARN_ON_GC_EARLY = true;
 
    // The browser will hold its own wakelock if there's a video in the document
    // that:
@@ -81,14 +82,15 @@ BwZcAAAICAAEb7wbwAcU7trkruQs4EAt4v3gQHxggNs8IIBzA=\
    let next_lock_id = 1;
 
    function FakeWakeLockSentinel(type) {
-      const id = next_lock_id;
+      const id = `FakeWakeLockSentinel#${next_lock_id}`;
       next_lock_id += 1;
 
       if (TRACE) {
-         console.trace(`[FakeWakeLockSentinel#${id}] acquired`);
+         console.trace(`[${id}] acquired`);
       }
 
       let e_video = document.createElement('video');
+      e_video.id = `${id}-video`;
       e_video.hidden = true; // Wild that Firefox doesn't care about this.
       e_video.muted = true;
       e_video.loop = true;
@@ -97,31 +99,63 @@ BwZcAAAICAAEb7wbwAcU7trkruQs4EAt4v3gQHxggNs8IIBzA=\
 
       document.body.appendChild(e_video);
 
-      function release_video() {
-         if (TRACE) {
-            console.trace(`[FakeWakeLockSentinel#${id}] (releasing video)`);
-         }
+      function release_video(why) {
+         why.defined;
          if (!e_video) return;
+
+         const text = `[${id}] (releasing video via ${why})`;
+         if (WARN_ON_GC_EARLY && why == 'gc') {
+            console.warn(text, {WARN_ON_GC_EARLY});
+         } else if (TRACE) {
+            console.trace(text, {TRACE});
+         }
+
          document.body.removeChild(e_video);
          e_video = null;
       }
-      on_finalize.register(this, release_video);
+      on_finalize.register(this, () => release_video('gc'));
 
       this.released = false;
       this.type = type;
+      this.onrelease = undefined;
+
+      // The browser has a form of promise pruning, where it can figure
+      // out that there's no way to access something anymore.
+      // The problem is that it's figuring out that we're not going to
+      // call release(), so we get finalized before we call onrelease.
+      // * The caller wants the screen to stay locked until the browser
+      //   "randomly" releases the lock. (e.g. visibility change)
+      // * We want to leave the screen locked until the caller's lock gets
+      //   GC'd.
+      // Maybe a better way than using onrelease, is for the caller to
+      // just poll .released, or even manually call release() itself
+      // periodically.
+      // So that's the recommendation:
+      async function wake_forever(refresh_every_n_seconds = 10) {
+         while (true) {
+            try {
+               const lock = await navigator.wakeLock.request();
+               await new Promise(go => {
+                  setTimeout(go, refresh_every_n_seconds*1000);
+               });
+               await lock.release();
+            } catch (e) {}
+         }
+      }
+
+
       this.release = async function release() {
          if (!this.released) {
             if (TRACE) {
-               console.trace(`[FakeWakeLockSentinel#${id}] released`);
+               console.trace(`[${id}] released`);
             }
-            release_video();
+            release_video('release()');
             this.released = true;
             if (this.onrelease) {
                this.onrelease();
             }
          }
       };
-      this.onrelease = undefined;
    }
 
    // -
