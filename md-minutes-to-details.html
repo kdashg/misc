@@ -118,24 +118,32 @@ function find_date(str) {
 }
 if (find_date('# WGSL 2021-04-13 Minutes') != '2021-04-13') throw 'find_date';
 
+const UNICODE_HYPHEN = '\u2010'; // Unicode Character 'HYPHEN' (U+2010)
+const VERBOSE = true;
+
 function to_github_general_url_slug(text) {
    let parts = text.split(/ +/);
    parts = parts.map(s => {
-      s = s.toLowerCase();
-      s = [].filter.call(s, c => c.match(/[0-9A-Za-z-_()\/]/)); // Filter character set.
+      s = [].filter.call(s, c => c.match(/[0-9A-Za-z\u2010_()\/]/)); // Filter character set.
       s = s.join('');
       return s;
    });
    return parts.join('-');
 }
 function to_github_page_slug(text) {
-   let ret = to_github_general_url_slug(text);
+   let ret = text;
+   ret = ret.replaceAll('-', UNICODE_HYPHEN); // Yes, if you ask for a wiki page named 'A-Z', it gives you 'A\u2010Z'.
+   ret = to_github_general_url_slug(ret);
    ret = ret.replaceAll(/[()\/]/g, '-');
+   console.log(`to_github_page_slug('${text}') -> '${ret}'`);
    return ret;
 }
 function to_github_anchor_slug(text) {
-   let ret = to_github_general_url_slug(text);
+   let ret = text;
+   ret = ret.toLowerCase();
+   ret = to_github_general_url_slug(ret);
    ret = ret.replaceAll(/[()\/]/g, '');
+   console.log(`to_github_anchor_slug('${text}') -> '${ret}'`);
    return ret;
 }
 
@@ -151,24 +159,33 @@ function to_github_anchor_slug(text) {
    const was = to_github_anchor_slug(title);
    if (was != expected) throw was;
 }
+// https://github.com/gpuweb/gpuweb/wiki/WGSL-2024-03-12-Minutes
 {
-   const title    = 'GPU Web meeting 2022-08-02/03 APAC-timed';
-   const expected = 'gpu-web-meeting-2022-08-02-03-apac-timed';
+   const title    = 'WGSL 2024-03-12 Minutes';
+   const expected = 'WGSL-2024\u201003\u201012-Minutes';
    const was = to_github_page_slug(title);
    if (was != expected) throw was;
 }
+{
+   const title = 'Feature request: textureQueryLod equivalent · Issue #4180';
+   const expected = 'feature-request-texturequerylod-equivalent--issue-4180';
+   const was = to_github_anchor_slug(title);
+   if (was != expected) throw was;
+}
 
-const RE_URL = /\[(.*)\]\((.*?)\)/g;
+const RE_URL = /\[(.*)\]\((.*)\)/g;
 
 function section_desc(node) {
    let issue_url;
    let slug;
    if (node.title) {
       if (!node.title.startsWith('#')) throw node.title;
-      const section_title = node.title.replace(/#+ /, '');
+      const section_title = node.title.replace(/#+ /, '').trim();
       const found = Array.from(section_title.matchAll(RE_URL));
+      console.log(...found);
       issue_url = (found[0] || [])[2];
       const title_text = section_title.replaceAll(RE_URL, '$1');
+      console.log({section_title, issue_url, title_text});
       slug = to_github_anchor_slug(title_text);
    }
 
