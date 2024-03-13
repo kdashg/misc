@@ -121,10 +121,21 @@ if (find_date('# WGSL 2021-04-13 Minutes') != '2021-04-13') throw 'find_date';
 const UNICODE_HYPHEN = '\u2010'; // Unicode Character 'HYPHEN' (U+2010)
 const VERBOSE = true;
 
+function canon_json_from(x) {
+   if (typeof(x) == 'object') {
+      const unsorted = x;
+      x = {};
+      for (const k of Object.keys(x).sort()) {
+         x[k] = unsorted[k];
+      }
+   }
+   return JSON.stringify(x);
+}
+
 function to_github_general_url_slug(text) {
    let parts = text.split(/ +/);
    parts = parts.map(s => {
-      s = [].filter.call(s, c => c.match(/[0-9A-Za-z\u2010_()\/]/)); // Filter character set.
+      s = [].filter.call(s, c => c.match(/[0-9A-Za-z-\u2010_()\/]/)); // Filter character set.
       s = s.join('');
       return s;
    });
@@ -159,6 +170,7 @@ function to_github_anchor_slug(text) {
    const was = to_github_anchor_slug(title);
    if (was != expected) throw was;
 }
+
 // https://github.com/gpuweb/gpuweb/wiki/WGSL-2024-03-12-Minutes
 {
    const title    = 'WGSL 2024-03-12 Minutes';
@@ -173,20 +185,35 @@ function to_github_anchor_slug(text) {
    if (was != expected) throw was;
 }
 
-const RE_URL = /\[(.*)\]\((.*)\)/g;
+const RE_URL = /\[(.*?)\]\(([^\)]*)\)/g;
+
+function parse_title(title) {
+   if (!title.startsWith('#')) throw title;
+   const section_title = title.replace(/#+ /, '').trim();
+   const found = Array.from(section_title.matchAll(RE_URL));
+   console.log(...found);
+   const issue_url = (found[0] || [])[2];
+   const title_text = section_title.replaceAll(RE_URL, '$1');
+   console.log({section_title, issue_url, title_text});
+   const slug = to_github_anchor_slug(title_text);
+   return {issue_url, slug};
+}
+
+// https://github.com/gpuweb/gpuweb/wiki/GPU-Web-2024-03-06
+{
+   const fn_test = () => parse_title('## Should we constrain the location of user input-output stage variables WGSL [#1962](https://github.com/gpuweb/gpuweb/issues/1962#issuecomment-1934840808) (PR [#4503](https://github.com/gpuweb/gpuweb/pull/4503))');
+   const expected = {
+      issue_url: 'https://github.com/gpuweb/gpuweb/issues/1962#issuecomment-1934840808',
+      slug: 'should-we-constrain-the-location-of-user-input-output-stage-variables-wgsl-1962-pr-4503',
+   };
+   const was = fn_test();
+   console.assert(canon_json_from(was) == canon_json_from(expected), {fn_test: fn_test.toString(), was, expected});
+}
 
 function section_desc(node) {
-   let issue_url;
-   let slug;
+   let title_info = {};
    if (node.title) {
-      if (!node.title.startsWith('#')) throw node.title;
-      const section_title = node.title.replace(/#+ /, '').trim();
-      const found = Array.from(section_title.matchAll(RE_URL));
-      console.log(...found);
-      issue_url = (found[0] || [])[2];
-      const title_text = section_title.replaceAll(RE_URL, '$1');
-      console.log({section_title, issue_url, title_text});
-      slug = to_github_anchor_slug(title_text);
+      title_info = parse_title(node.title);
    }
 
    // -
@@ -209,12 +236,10 @@ function section_desc(node) {
 
    // -
 
-   const ret = {
-      issue_url,
-      slug,
+   const ret = Object.assign({
       content,
       subsections,
-   };
+   }, title_info);
    if (!ret.content) delete ret.content;
    if (!ret.subsections.length) delete ret.subsections;
    return ret;
@@ -241,7 +266,7 @@ function section_desc(node) {
       content: content.trim(),
    };
    const was = section_desc(h3_section);
-   if (JSON.stringify(expected) != JSON.stringify(was)) throw {was, expected};
+   if (canon_json_from(expected) != canon_json_from(was)) throw {was, expected};
 }
 
 // -
