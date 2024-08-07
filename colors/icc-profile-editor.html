@@ -5,7 +5,10 @@
    </head>
    <body>
       Import: <input id=e_import type=file>
-      <br><input id=e_export type=button value=Export>
+      <br><i id=e_import_hash></i>
+      <hr>
+      Export: <input id=e_export_name type=text value=profile.icc> <input id=e_export type=button value=Export>
+      <br><i id=e_export_hash></i>
       <hr>
       <textarea id=e_text style='width: 100%; height: 50vh;'>
       </textarea>
@@ -135,7 +138,7 @@ class ViewDeserializer {
    pad_to_alignment(n) {
       const tail = this.byte_offset % n;
       const indent = this.indent();
-      console.log(`${indent}ViewDeserializer<${this.data_view.byteOffset}>.pad_to_alignment(${n}) @+${this.byte_offset}`);
+      console.log(`${indent}ViewDeserializer<${this.data_view && this.data_view.byteOffset}>.pad_to_alignment(${n}) @+${this.byte_offset}`);
       if (tail) {
          this.byte_offset += n - tail;
       }
@@ -226,11 +229,10 @@ class ViewDeserializer {
       });
 
       // Push!
-      if (log) console.log(`${this.indent()}`, 'pre-push', test_deser.byte_offset, byte_offset_start);
-      if (log) console.log(`${this.indent()}`, {ret, type});
+      if (log) console.log(`${this.indent()}`, 'pre-push', type, ret, test_deser.byte_offset, byte_offset_start);
       console.assert(type.push, type);
       type.push(test_deser, ret);
-      if (log) console.log(`${this.indent()}`, 'post-push', test_deser.byte_offset, byte_offset_end, this.byte_offset);
+      if (log) console.log(`${this.indent()}`, 'post-push', type, test_deser.byte_offset, byte_offset_end, this.byte_offset);
 
       // Check that we ended in the same place.
       if (test_deser.byte_offset != this.byte_offset) {
@@ -244,10 +246,11 @@ class ViewDeserializer {
             for (const ii in output_bytes) {
                expected = input_bytes[ii];
                was = output_bytes[ii];
-               console.log(was == expected, was, expected);
+               console.log(ii, was == expected, was, expected);
                if (was != expected) break;
             }
-            throw 5;
+            Object.assign(window, {input_bytes, output_bytes});
+            throw {i, input_bytes, output_bytes};
          }
       }
       output_bytes.fill(0); // Re-zero.
@@ -390,9 +393,15 @@ function ArrayType(elem_type, elem_count) {
       if (this.elem_count >= 0) { // Handles NaN
          n = this.elem_count;
       }
+      console.log({src});
+      console.log('record p array push', {n, this:this, src:src.slice()});
+      let ii = 0;
       for (const i of range(n)) {
+         //console.log('record p', {src,i,v:src[i]});
          deser.push(this.elem_type, src[i]);
+         ii += 1;
       }
+      console.log('record p array push ii', {ii});
    };
 
    this.pop = function(deser) {
@@ -491,8 +500,23 @@ function TypeContext(default_endian) {
          return this.get_type(schema);
       });
       type = Object.assign({}, type);
-      type.name = type_name;
+      this._set_type_name(type, type_name);
       return this.type_by_name[type_name] = type;
+   }
+
+   this._set_type_name = function(type, type_name) {
+      type.name = type_name;
+      if (typeof(type.pop) == 'function') {
+         Object.defineProperty(type.pop, 'name', {
+            value: `popp$<${type_name}>`,
+         });
+      }
+      if (typeof(type.push) == 'function') {
+         Object.defineProperty(type.push, 'name', {
+            value: `push<${type_name}>`,
+         });
+      }
+      console.log(type.name, type.pop.name);
    }
 
    this.add_types = function(schema_by_type_name) {
@@ -509,7 +533,7 @@ function TypeContext(default_endian) {
       if (cached) return cached;
 
       const type = this._parse_type(type_name);
-      type.name = type_name;
+      this._set_type_name(type, type_name);
       return this.type_by_name[type_name] = type;
    }
 
@@ -558,48 +582,6 @@ function TypeContext(default_endian) {
 }
 
 // ------------------------------------
-
-/*
-function parse_val(data_iter, type) {
-   if (type.fields) {
-      const ret = {};
-      for (const [field_name, field_type] of type.fields) {
-         ret[field_name] = parse_val(data_iter, field_type);
-      }
-      return ret;
-   }
-
-   if (type.setget) {
-      type.BYTE_SIZE.defined;
-      const ret = type.setget(data_iter.view, data_iter.pos);
-      data_iter.pos += type.BYTE_SIZE;
-      return ret;
-   }
-
-   throw type;
-}
-
-function emit_val(data_iter, type, val) {
-   if (type.fields) {
-      for (const [field_name, field_type] of type.fields) {
-         emit_val(data_iter, field_type, val[field_name]);
-      }
-      return;
-   }
-
-   if (type.setget) {
-      type.BYTE_SIZE.defined;
-      if (data_iter.view) {
-         type.setget(data_iter.view, data_iter.pos, val);
-      }
-      data_iter.pos += type.BYTE_SIZE;
-      return;
-   }
-
-   throw type;
-}
-*/
-
 
 const IccProfile = {};
 IccProfile.TagSig = {
@@ -783,6 +765,7 @@ IccProfile.TYPES.add_types({
             const str_deser = tag_deser.subview_n(record.string_offset, record.string_length);
             const str = str_deser.pop(`utf16[]`);
             console.log(7, str);
+            console.log('record pop', {record, str});
             str_by_lang_country_code[lang_country_code] = str;
          });
          tag_deser.pop_bytes(); // skip to end of tag
@@ -791,6 +774,7 @@ IccProfile.TYPES.add_types({
       },
 
       push: (tag_deser, tag) => {
+         const tag_start_offset = tag_deser.byte_offset;
          const records = Object.entries(tag.str_by_lang_country_code).map(
             ([lang_country_code, str]) => {
                console.log({lang_country_code});
@@ -818,11 +802,12 @@ IccProfile.TYPES.add_types({
             // JS .length is utf16 len not unicode len.
             const n = record.str.length;
             const str_t = `utf16[${n}]`;
-            record.string_offset = tag_deser.byte_offset;
-            console.log('record mid', record);
+            record.string_offset = tag_deser.byte_offset - tag_start_offset;
+            console.log('record pmid', record);
             tag_deser.push(str_t, record.str);
-            record.string_length = tag_deser.byte_offset - record.string_offset;
-            console.log('record post', record);
+            const end_offset = tag_deser.byte_offset - tag_start_offset;
+            record.string_length = end_offset - record.string_offset;
+            console.log('record post', str_t, record.string_length, tag_deser.byte_offset, tag, record);
          });
          records_pass2_deser.push(records_t, records);
       },
@@ -937,6 +922,7 @@ IccProfile.TYPES.add_types({
       pop: function(deser) {
          const tag = deser.pop('lutAToBType_Partial');
          const n_by_name = this.n_by_name(tag);
+         console.log('lutAToBType pop', {tag});
 
          // -
 
@@ -962,7 +948,11 @@ IccProfile.TYPES.add_types({
 
             const elem_t = (clut.elem_byte_count == 2) ? 'u16' : 'u8';
             const values_t = `${elem_t}[${box.values_count}]`;
-            clut.values = offset_deser.pop(values_t);
+            const unorm_values = offset_deser.pop(values_t);
+            const divisor = Math.pow(0x100, clut.elem_byte_count) - 1;
+            console.log('pop clut.values unorm', unorm_values.slice());
+            clut.values = [].map.call(unorm_values, v => v / divisor);
+            console.log('pop clut.values float', clut.values.slice());
             console.log('partial_.pop values', values_t, offset_deser.byte_offset);
 
             tag.clut = clut;
@@ -1006,6 +996,7 @@ IccProfile.TYPES.add_types({
          return tag;
       },
       push: function(deser, tag) {
+         const tag_start_offset = deser.byte_offset;
          console.assert(!tag.a_curves == !tag.clut, tag);
          if (!tag.clut) {
             console.assert(tag.num_input_channels == tag.num_output_channels, tag);
@@ -1021,6 +1012,7 @@ IccProfile.TYPES.add_types({
          const n_by_name = this.n_by_name(tag);
          const partial_pass2_deser = deser.clone();
          deser.push('lutAToBType_Partial', tag);
+         console.log('lutAToBType_Partial push pre', {tag});
 
          // -
 
@@ -1028,7 +1020,8 @@ IccProfile.TYPES.add_types({
          if (tag.a_curves) {
             parts.push([tag.a_curve_offset, () => {
                deser.pad_to_alignment(4);
-               tag.a_curve_offset = deser.byte_offset;
+               tag.a_curve_offset = deser.byte_offset - tag_start_offset;
+
                if (tag.a_curves.length != n_by_name.a_curves) throw tag;
                tag.a_curves.forEach(
                   curve => deser.push('AlignedTagType', curve)
@@ -1039,12 +1032,10 @@ IccProfile.TYPES.add_types({
          if (tag.clut) {
             parts.push([tag.clut_offset, () => {
                deser.pad_to_alignment(4);
-               tag.clut_offset = deser.byte_offset;
+               tag.clut_offset = deser.byte_offset - tag_start_offset;
 
                const clut = tag.clut;
                deser.push('lutAToBType_CLUT_Partial', clut);
-               console.log('partial_.push lutAToBType_CLUT_Partial', deser.byte_offset - tag.clut_offset);
-               if (deser.byte_offset - tag.clut_offset != 20) throw 20;
 
                if (clut.grid_points_by_dim.length != tag.num_input_channels) throw tag;
                const box = {
@@ -1056,7 +1047,11 @@ IccProfile.TYPES.add_types({
                if (clut.values.length != box.values_count) throw {tag, values_count: box.values_count};
                const elem_t = (clut.elem_byte_count == 2) ? 'u16' : 'u8';
                const values_t = `${elem_t}[${box.values_count}]`;
-               deser.push(values_t, clut.values);
+               const divisor = Math.pow(0x100, clut.elem_byte_count) - 1;
+               console.log('push clut.values float', clut.values.slice());
+               const unorm_values = [].map.call(clut.values, v => Math.round(v * divisor));
+               console.log('push clut.values unorm', unorm_values.slice());
+               deser.push(values_t, unorm_values);
                console.log('partial_.push values', deser.byte_offset - tag.clut_offset);
             }]);
          }
@@ -1064,7 +1059,8 @@ IccProfile.TYPES.add_types({
          if (tag.m_curves) {
             parts.push([tag.m_curve_offset, () => {
                deser.pad_to_alignment(4);
-               tag.m_curve_offset = deser.byte_offset;
+               tag.m_curve_offset = deser.byte_offset - tag_start_offset;
+
                if (tag.m_curves.length != n_by_name.m_curves) throw tag;
                tag.m_curves.forEach(
                   curve => deser.push('AlignedTagType', curve)
@@ -1075,7 +1071,8 @@ IccProfile.TYPES.add_types({
          if (tag.matrix) {
             parts.push([tag.matrix_offset, () => {
                deser.pad_to_alignment(4);
-               tag.matrix_offset = deser.byte_offset;
+               tag.matrix_offset = deser.byte_offset - tag_start_offset;
+
                deser.push(`s15Fixed16Number[12]`, tag.matrix);
             }]);
          }
@@ -1083,7 +1080,8 @@ IccProfile.TYPES.add_types({
          if (tag.b_curves) {
             parts.push([tag.b_curve_offset, () => {
                deser.pad_to_alignment(4);
-               tag.b_curve_offset = deser.byte_offset;
+               tag.b_curve_offset = deser.byte_offset - tag_start_offset;
+
                if (tag.b_curves.length != n_by_name.b_curves) throw tag;
                tag.b_curves.forEach(
                   curve => deser.push('AlignedTagType', curve)
@@ -1102,11 +1100,75 @@ IccProfile.TYPES.add_types({
          parts.forEach(([offset, fn]) => fn());
 
          // -
-         console.log('partial_pass2_deser.push', tag);
          partial_pass2_deser.push('lutAToBType_Partial', tag);
+         console.log('lutAToBType_Partial push post', {tag});
       },
    },
    lutBToAType: 'lutAToBType',
+
+   IccProfile_Partial: {
+      header: 'Header',
+      tag_count: 'u32',
+   },
+
+   IccProfile: {
+      pop: deser => {
+         const profile = deser.pop('IccProfile_Partial');
+         const tag_table_t = `TagTableEntry[${profile.tag_count}]`;
+         const tag_table = deser.pop(tag_table_t);
+         console.log({profile, tag_table});
+
+         const tag_by_tag_sig = profile.tag_by_tag_sig = {};
+         const tag_sig_by_i = {};
+         tag_table.forEach((entry,i) => {
+            const tag_sig = entry.tag_sig;
+            console.assert(!tag_sig_by_i[tag_sig], 'Duplicate tag:', {entry, i, dupe_of_i: tag_sig_by_i[tag_sig]});
+            tag_sig_by_i[tag_sig] = i;
+
+            const tag_deser = deser.subview_n(entry.data_start, entry.size);
+            const tag = tag_deser.pop('TagType');
+            tag_by_tag_sig[tag_sig] = tag;
+         });
+         console.log('pop', {tag_by_tag_sig, tag_table});
+         deser.pop_bytes(); // Skip to end!
+
+         return profile;
+      },
+      push: (deser, profile) => {
+         const tag_by_tag_sig = profile.tag_by_tag_sig;
+         const tag_table = Object.entries(tag_by_tag_sig).map(
+            ([tag_sig,tag]) => {
+               return {
+                  tag_sig,
+                  data_start: NaN,
+                  size: NaN,
+                  tag,
+               };
+            }
+         );
+         profile.tag_count = tag_table.length;
+         const profile_partial_pass2_deser = deser.clone();
+         deser.push('IccProfile_Partial', profile);
+
+         const tag_table_t = `TagTableEntry[${profile.tag_count}]`;
+         const tag_table_pass2_deser = deser.clone();
+         deser.push(tag_table_t, tag_table);
+
+         tag_table.forEach((entry,i) => {
+            const tag_sig = entry.tag_sig;
+            deser.pad_to_alignment(4);
+            entry.data_start = deser.byte_offset;
+            deser.push('TagType', entry.tag);
+            entry.size = deser.byte_offset - entry.data_start;
+         });
+
+         console.log('push', {tag_by_tag_sig, tag_table});
+         tag_table_pass2_deser.push(tag_table_t, tag_table);
+
+         profile.header.profile_size = deser.byte_offset;
+         profile_partial_pass2_deser.push('IccProfile_Partial', profile);
+      },
+   },
 });
 
 // -
@@ -1165,33 +1227,26 @@ IccProfile.TAG_TYPE_BY_TYPE_SIG = {
    'para': 'parametricCurveType',
 };
 
-IccProfile.from_bytes = function(data_view) {
-   const viewer = new ViewDeserializer({
-      data_view, types: IccProfile.TYPES,
+IccProfile.from_bytes = function(view) {
+   const deser = new ViewDeserializer({
+      data_view: data_view_from_view(view), types: IccProfile.TYPES,
    });
 
-   const profile = window.profile = {};
-   profile.header = viewer.pop('Header');
-   console.log('header', {profile});
-   console.log(viewer.byte_offset);
-
-   const tag_count = viewer.pop('u32');
-   const tag_table = viewer.pop(`TagTableEntry[${tag_count}]`);
-   console.log({tag_count, tag_table});
-
-   const tag_by_tag_sig = profile.tag_table = {};
-   const tag_sig_by_i = {};
-   tag_table.forEach((entry,i) => {
-      const tag_sig = entry.tag_sig;
-      console.assert(!tag_sig_by_i[tag_sig], 'Duplicate tag:', {entry, i, dupe_of_i: tag_sig_by_i[tag_sig]});
-      tag_sig_by_i[tag_sig] = i;
-
-      const tag_viewer = viewer.subview_n(entry.data_start, entry.size);
-      const tag = tag_viewer.pop('TagType');
-      tag_by_tag_sig[tag_sig] = tag;
-   });
-
+   const profile = window.profile = deser.pop('IccProfile');
    return profile;
+}
+IccProfile.to_bytes = function(profile) {
+   const size_probe_deser = new ViewDeserializer({
+      data_view: null, types: IccProfile.TYPES,
+   });
+   size_probe_deser.push('IccProfile', profile);
+
+   const bytes = new Uint8Array(size_probe_deser.byte_offset);
+   const deser = new ViewDeserializer({
+      data_view: data_view_from_view(bytes), types: IccProfile.TYPES,
+   });
+   deser.push('IccProfile', profile);
+   return bytes;
 }
 
 // -
@@ -1249,36 +1304,62 @@ function download_blob(filename, blob) {
 
 // -
 
-function stringify_replacer(k, v) {
-   if (ArrayBuffer.isView(v)) return [].slice.call(v);
-   if (v.length > 100) {
-      return `${v.constructor.name}(${v.length})`;
-   }
-   return v;
+function hex_from_view(view) {
+   const bytes = bytes_from_view(view);
+   const parts = [].map.call(bytes,
+      v => {
+         v = v.toString(16);
+         while (v.length < 2) {
+            v = '0' + v;
+         }
+         return v;
+      }
+   );
+   const hex = parts.join('');
+   return hex;
 }
 
 e_import.addEventListener('input', async e => {
    if (!e_import.files.length)
       return;
    const f = e_import.files[0];
-   const ab = await f.arrayBuffer();
-   const dv = new DataView(ab);
-   const profile = IccProfile.from_bytes(dv);
+
+   const bytes = new Uint8Array(await f.arrayBuffer());
+   const hash_bytes = new Uint8Array(await crypto.subtle.digest('sha-256', bytes));
+   const hash_str = hex_from_view(hash_bytes);
+   e_import_hash.textContent = `(sha-256:${hash_str})`;
+
+   const profile = IccProfile.from_bytes(bytes);
    console.log({profile});
-   const t = JSON.stringify(profile, stringify_replacer, 3);
+
+   const OPAQUE_LONG_ARRAYS = false; // true will break Export.
+
+   const t = JSON.stringify(
+      profile,
+      (k, v) => {
+         if (ArrayBuffer.isView(v)) return [].slice.call(v);
+         if (OPAQUE_LONG_ARRAYS && v.length > 100) {
+            return `${v.constructor.name}(${v.length})`;
+         }
+         return v;
+      },
+      3
+   );
    e_text.value = t;
 });
 e_export.addEventListener('click', async e => {
    const t = e_text.value;
    const p = JSON.parse(t);
-   const s = new Serializer(ICC_PROFILE_TYPES);
-   s.serialize('Header', p.header);
-   s.serialize('u32', p.tag_table.length);
-   for (const tag of p.tag_table) {
-      s.serialize(tag);
-   }
-   const b = s.blob();
-   download_blob('profile.icc', b);
+
+   const bytes = IccProfile.to_bytes(p);
+   const hash_bytes = new Uint8Array(await crypto.subtle.digest('sha-256', bytes));
+   const hash_str = hex_from_view(hash_bytes);
+   e_export_hash.textContent = `(sha-256:${hash_str})`;
+
+   const ICC_PROFILE_MIME = 'application/vnd.iccprofile';
+   const blob = new Blob([bytes], {type: ICC_PROFILE_MIME});
+   const file_name = e_export_name.value || 'profile.icc';
+   download_blob(file_name, blob);
 });
       </script>
    </body>
