@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <meta charset=utf-8>
+   </head>
+   <body>
+      Import: <input id=e_import type=file>
+      <br><input id=e_export type=button value=Export>
+      <hr>
+      <textarea id=e_text style='width: 100%; height: 50vh;'>
+      </textarea>
+      <script>
+
+// -
+
+function invoke(fn) {
+   return fn();
+}
+
+function range(n) {
+   return Array(n).keys();
+}
+
+function panic(v) {
+   throw v;
+}
+
+function map_key_by_value(value_by_key) {
+   const key_by_value = {};
+   Object.entries(value_by_key).forEach(
+      ([k,v]) => {
+         key_by_value[v] = k;
+      }
+   );
+   return key_by_value;
+}
+
+// -
+
+function Fuse(max_count) {
+   this.count = 0;
+   this.tick = function() {
+      this.count += 1;
+      if (this.count >= max_count) throw max_count;
+   };
+}
+const FUSE = new Fuse(300*1000);
+
+// -
+
+function StrEnum(name, valid_values) {
+   this.constructor.name = name;
+   for (const v of valid_values) {
+      this[v] = v;
+   }
+   this.From = function(value) {
+      if (!valid_values.includes(value)) throw {name, value, valid_values};
+      return value;
+   };
+}
+
+const Endianness = new StrEnum('Endianness', ['big', 'little']);
+const IccProfileClass = new StrEnum('IccProfileClass', [
+   'scnr',
+   'mntr',
+   'prtr',
+   'link',
+   'spac',
+   'abst',
+   'nmcl',
+]);
+
+// -
+
+function data_view_from_view(view) {
+   return new DataView(
+      view.buffer,
+      view.byteOffset,
+      view.byteLength);
+}
+
+function bytes_from_view(view) {
+   return new Uint8Array(
+      view.buffer,
+      view.byteOffset,
+      view.byteLength);
+}
+
+// -
+
+class ViewDeserializer {
+   constructor(desc) {
+      desc.types.defined;
+      if (!desc.data_view && desc.data_view !== null) {
+         throw desc;
+      }
+      Object.assign(this, {
+         byte_offset: 0,
+         _pop_depth: 0,
+      }, desc);
+      this._test_deser = null;
+   }
+
+   clone() {
+      return new ViewDeserializer(this);
+   }
+
+   subview(start, end) {
+      console.log(this, `.subview(`, {start, end}, `)`);
+      start = start || 0;
+      const ret = this.clone();
+
+      let bytes = bytes_from_view(ret.data_view);
+      bytes = bytes.subarray(start, end);
+      ret.data_view = data_view_from_view(bytes);
+      ret.byte_offset = 0;
+      return ret;
+   }
+
+   subview_n(start, n) {
+      console.log(this, `.subview_n(`, {start, n}, `)`);
+      start = start || 0;
+      return this.subview(start, start+n);
+   }
+
+   has_bytes(n) {
+      if (n === undefined) {
+         n = 1;
+      }
+      if (!this.data_view) return true;
+      const remaining = this.data_view.byteLength - this.byte_offset;
+      return n <= remaining;
+   }
+
+   pad_to_alignment(n) {
+      const tail = this.byte_offset % n;
+      const indent = this.indent();
+      console.log(`${indent}ViewDeserializer<${this.data_view.byteOffset}>.pad_to_alignment(${n}) @+${this.byte_offset}`);
+      if (tail) {
+         this.byte_offset += n - tail;
+      }
+      console.log(`${indent}| => @+${this.byte_offset}`);
+   }
+
+   view_n(n) {
+      if (!this.data_view) return new Uint8Array(n);
+      let bytes = bytes_from_view(this.data_view);
+      bytes = bytes.subarray(this.byte_offset);
+      bytes = bytes.subarray(0, n);
+      return bytes;
+   }
+
+   pop_bytes(n) {
+      if (!this.has_bytes(n)) return null;
+
+      const ret = this.view_n(n);
+      ret.byte_size = ret.byteLength;
+
+      this.byte_offset += ret.byte_size;
+      return ret;
+   }
+
+   indent() {
+      const TAB = '|  ';
+      return TAB.repeat(this._pop_depth % 10);
+   }
+
+   pop(type) {
+      if (!type) throw type;
+      if (typeof(type) == 'string') {
+         type = this.types.get_type(type);
+      }
+      /*
+      let log = () => {
+         const indent = this.indent();
+         let args = [].slice.call(arguments);
+         console.log({args});
+         if (indent) {
+            args.unshift(indent.slice(0,indent.length-1));
+         }
+         console.log(...args);
+      };
+      */
+      const log = !(type.name == 'utf16' || type.name == 'u16');
+
+      const byte_offset_start = this.byte_offset;
+      if (log) console.log(`${this.indent()}ViewDeserializer<${this.data_view.byteOffset}>.pop(${type.name}) @+${this.byte_offset}`);
+      FUSE.tick();
+
+      this._pop_depth += 1;
+      const ret = type.pop(this);
+      console.assert(ret !== undefined, type.name);
+      this._pop_depth -= 1;
+
+      if (log) console.log(`${this.indent()}=> ${type.name}`, ret);
+
+      // -
+      // Check that push works!
+
+      const byte_offset_end = this.byte_offset;
+      const byte_size = byte_offset_end - byte_offset_start;
+
+      if (!this._test_deser) {
+         this._test_deser = this.clone();
+         // Make a copy of the data array.
+         let bytes = bytes_from_view(this._test_deser.data_view);
+         bytes = bytes.slice();
+         bytes.fill(0);
+         this._test_deser.data_view = data_view_from_view(bytes);
+         if (this._test_deser.data_view.byteLength != this.data_view.byteLength) throw 9;
+      }
+      const test_deser = this._test_deser;
+      if (this._test_deser.data_view.byteLength != this.data_view.byteLength) throw {test_deser, this:this};
+
+      test_deser.byte_offset = byte_offset_start;
+      const output_bytes = test_deser.view_n(byte_size);
+
+      this.byte_offset = byte_offset_start;
+      const input_bytes = this.view_n(byte_size);
+      if (log) console.log(`${this.indent()}`, {input_bytes, output_bytes});
+      this.byte_offset = byte_offset_end;
+
+      // Ensure still zeroed.
+      output_bytes.forEach((v,i) => {
+         if (v) throw {v, i, output_bytes, this:this};
+      });
+
+      // Push!
+      if (log) console.log(`${this.indent()}`, 'pre-push', test_deser.byte_offset, byte_offset_start);
+      if (log) console.log(`${this.indent()}`, {ret, type});
+      console.assert(type.push, type);
+      type.push(test_deser, ret);
+      if (log) console.log(`${this.indent()}`, 'post-push', test_deser.byte_offset, byte_offset_end, this.byte_offset);
+
+      // Check that we ended in the same place.
+      if (test_deser.byte_offset != this.byte_offset) {
+         throw {test_deser, this:this};
+      }
+      // Check for match.
+      for (const i in output_bytes) {
+         let expected = input_bytes[i];
+         let was = output_bytes[i];
+         if (was != expected) {
+            for (const ii in output_bytes) {
+               expected = input_bytes[ii];
+               was = output_bytes[ii];
+               console.log(was == expected, was, expected);
+               if (was != expected) break;
+            }
+            throw 5;
+         }
+      }
+      output_bytes.fill(0); // Re-zero.
+
+      return ret;
+   }
+
+   push(type, val) {
+      if (!type) throw type;
+      if (typeof(type) == 'string') {
+         type = this.types.get_type(type);
+      }
+
+      const indent = this.indent();
+      let log = function() { console.log(...arguments); }
+      if (['utf16', 'u16', 'zero'].includes(type.name)) {
+         log = () => undefined;
+      }
+      log(`${indent}ViewDeserializer<${this.data_view && this.data_view.byteOffset}>.push(${type.name},`, val, `) @+${this.byte_offset}`);
+
+      this._pop_depth += 1;
+      type.push(this, val);
+      this._pop_depth -= 1;
+
+      log(`${indent}=> @+${this.byte_offset}`);
+   }
+}
+
+// -
+
+const NATIVE_ENDIAN = invoke(() => {
+   const native_u16 = new Uint16Array([0x01]);
+   const dv = new DataView(native_u16.buffer);
+   const first_byte = dv.getUint8(0);
+   if (first_byte == 0x01) return 'little';
+   return 'big';
+});
+
+// -
+
+function PrimType(type_name, endian) {
+   endian.defined;
+   endian = Endianness.From(endian);
+   const as_little_endian = (endian == 'little');
+
+   const BASE_TYPE_BY_TYPE = {
+      'zero': 'u8',
+      'utf16': 'u16',
+   };
+
+   let base_type = BASE_TYPE_BY_TYPE[type_name] || type_name;
+
+   const INFO_BY_BASE_TYPE = {
+      'i8': {byte_size: 1, long_type: 'Int8'},
+      'u8': {byte_size: 1, long_type: 'Uint8'},
+      'i16': {byte_size: 2, long_type: 'Int16'},
+      'u16': {byte_size: 2, long_type: 'Uint16'},
+      'i32': {byte_size: 4, long_type: 'Int32'},
+      'u32': {byte_size: 4, long_type: 'Uint32'},
+      'i64': {byte_size: 8, long_type: 'BigInt64'},
+      'u64': {byte_size: 8, long_type: 'BigUint64'},
+      'f16': {byte_size: 2, long_type: 'Float16'},
+      'f32': {byte_size: 4, long_type: 'Float32'},
+      'f64': {byte_size: 8, long_type: 'Float64'},
+   };
+   const INFO = INFO_BY_BASE_TYPE[base_type];
+   if (!INFO) throw {base_type};
+   this.byte_size = INFO.byte_size;
+
+   if (endian == NATIVE_ENDIAN || INFO.byte_size == 1) {
+      const typed_array_name = `${INFO.long_type}Array`;
+      this.typed_array_type = window[typed_array_name];
+   }
+
+   // -
+
+   const fn_set = (deser, value) => DataView.prototype['set' + INFO.long_type].call(deser.data_view, deser.byte_offset, value, as_little_endian);
+   const fn_get = deser => DataView.prototype['get' + INFO.long_type].call(deser.data_view, deser.byte_offset, as_little_endian);
+/*
+   this.value = function(data_view, byte_offset, value) {
+      if (value !== undefined) {
+         setter.call(data_view, byte_offset, value, as_little_endian);
+      }
+      return getter.call(data_view, byte_offset, as_little_endian);
+   };
+   this.view = function(view_deser) {
+      const byte_offset = view_deser.byte_offset;
+      return set_value => this.value(view_deser.data_view, byte_offset, set_value);
+   };
+*/
+   this.push = function(deser, value) {
+      if (deser.data_view) {
+         fn_set(deser, value);
+      }
+      deser.byte_offset += INFO.byte_size;
+   };
+   this.pop = function(deser) {
+      if (!deser.has_bytes(INFO.byte_size)) return null;
+      let ret = fn_get(deser);
+      deser.byte_offset += INFO.byte_size;
+      return ret;
+   };
+}
+
+function FixedPointType(whole_type_name, fract_type_name) {
+   const fract_type = new PrimType(fract_type_name, 'big');
+   const fract_divisor = Math.pow(0x100, fract_type.byte_size);
+
+   this.push = function(deser, src) {
+      const whole = Math.floor(src); // -1.5 => -2
+      const fract = src - whole;
+      const fract_bits = Math.round(fract * fract_divisor);
+      console.assert(fract >= 0, fract);
+      deser.push(whole_type_name, whole);
+      deser.push(fract_type_name, fract_bits);
+   };
+
+   this.pop = function(deser) {
+      const whole = deser.pop(whole_type_name);
+      const fract_bits = deser.pop(fract_type_name);
+      const ret = whole + (fract_bits / fract_divisor);
+      //console.log({whole, fract_bits, ret});
+      return ret;
+   };
+}
+
+function ArrayType(elem_type, elem_count) {
+   Object.assign(this, {elem_type, elem_count});
+
+   this.push = function(deser, src) {
+      if (src === undefined) {
+         if (this.elem_type.name == 'zero') {
+            src = new Uint8Array(this.elem_count);
+         }
+      }
+      if (this.elem_type.name == 'utf16') {
+         src = [].map.call(src, c => c.charCodeAt());
+      }
+      let n = src.length;
+      if (this.elem_count >= 0) { // Handles NaN
+         n = this.elem_count;
+      }
+      for (const i of range(n)) {
+         deser.push(this.elem_type, src[i]);
+      }
+   };
+
+   this.pop = function(deser) {
+      let ret = invoke(() => {
+         const typed_array_type = this.elem_type.typed_array_type;
+         if (typed_array_type) {
+            const byte_size = this.elem_count * this.elem_type.byte_size; // Or 0 if dynamic.
+            const bytes = deser.pop_bytes(byte_size || undefined);
+            const ret = new typed_array_type(bytes.buffer, bytes.byteOffset, this.elem_count || undefined);
+            if (this.elem_type.name == 'zero') {
+               ret._reserved = true;
+            }
+            return ret;
+         }
+
+         if (this.elem_count) {
+            let ret = Array(this.elem_count).fill().map(
+               () => deser.pop(this.elem_type)
+            );
+            if (ret.length != this.elem_count) throw {this:this, ret};
+            return ret;
+         }
+
+         const ret = [];
+         while (deser.has_bytes()) {
+            const v = deser.pop(this.elem_type);
+            ret.push(v);
+         }
+         return ret;
+      });
+      if (this.elem_type.name == 'utf16') {
+         ret = String.fromCharCode(...ret);
+      }
+      return ret;
+   };
+}
+
+function AsciiType(byte_size) {
+   Object.assign(this, {byte_size});
+
+   this.push = function(deser, val) {
+      const byte_view = deser.pop_bytes(this.byte_size || val.length);
+      byte_view.set([].map.call(val, c => c.charCodeAt(0)));
+      byte_view.fill(0x00, val.length);
+   };
+
+   this.pop = function(deser) {
+      const byte_view = deser.pop_bytes(this.byte_size || undefined);
+      let ret = String.fromCharCode(...byte_view);
+      ret = ret.replaceAll('\0', '');
+      return ret;
+   };
+}
+
+function StructType(field_type_by_name) {
+   field_type_by_name = Object.assign({}, field_type_by_name);
+   Object.assign(this, {field_type_by_name});
+
+   this.push = function(view_serializer, val) {
+      for (const [field_name, field_type] of Object.entries(field_type_by_name)) {
+         const field_val = val[field_name];
+         view_serializer.push(field_type, field_val);
+      }
+   };
+
+   this.pop = function(view_serializer) {
+      const ret = {};
+      for (const [field_name, field_type] of Object.entries(field_type_by_name)) {
+         console.log({field_name, field_type});
+         const field_val = view_serializer.pop(field_type);
+         if (!field_val._reserved) {
+            ret[field_name] = field_val;
+         }
+      }
+      return ret;
+   };
+}
+
+// -
+
+function TypeContext(default_endian) {
+   this.default_endian = default_endian && Endianness.From(default_endian);
+
+   this.type_by_name = {};
+
+   this.add_type = function(type_name, schema) {
+      console.log('add_type', {type_name, schema});
+      let type = this.type_by_name[type_name];
+      if (type) throw {type_name, type};
+      type = invoke(() => {
+         if (typeof(schema) == 'object') {
+            if (typeof(schema.pop) == 'function') return schema;
+            return this._parse_struct(schema);
+         }
+
+         return this.get_type(schema);
+      });
+      type = Object.assign({}, type);
+      type.name = type_name;
+      return this.type_by_name[type_name] = type;
+   }
+
+   this.add_types = function(schema_by_type_name) {
+      const type_by_type_name = {};
+      for (const [type_name, schema] of Object.entries(schema_by_type_name)) {
+         type_by_type_name[type_name] = this.add_type(type_name, schema);
+      }
+      return type_by_type_name;
+   }
+
+   this.get_type = function(type_name) {
+      //console.log('get_type', {type_name, type_by_name: this.type_by_name});
+      const cached = this.type_by_name[type_name];
+      if (cached) return cached;
+
+      const type = this._parse_type(type_name);
+      type.name = type_name;
+      return this.type_by_name[type_name] = type;
+   }
+
+   this._parse_struct = function(field_type_name_by_name) {
+      const field_type_by_name = {};
+      for (const [field_name, field_type_name] of Object.entries(field_type_name_by_name)) {
+         const field_type = this.get_type(field_type_name);
+         field_type_by_name[field_name] = field_type;
+      }
+      return new StructType(field_type_by_name);
+   }
+
+   this._parse_type = function(type_name) {
+      //console.log('_parse_type', {type_name});
+      if (type_name.endsWith(']')) {
+         const m = type_name.match(/(.+)[[](.*)]/);
+         if (!m) throw {type_name};
+         const elem_type_name = m[1];
+         const elem_count = parseInt(m[2]);
+
+         if (elem_type_name == 'ascii') {
+            return new AsciiType(elem_count);
+         }
+
+         const elem_type = this.get_type(elem_type_name);
+         return new ArrayType(elem_type, elem_count);
+      }
+
+      const basic_type_name = type_name;
+      let endian = this.default_endian;
+      if (type_name.endsWith('be')) {
+         endian = Endianness.big;
+         basic_type_name = type_name.slice(0, type_name.length - 2);
+      } else if (type_name.endsWith('le')) {
+         endian = Endianness.little;
+         basic_type_name = type_name.slice(0, type_name.length - 2);
+      }
+      return new PrimType(basic_type_name, endian);
+   };
+
+   this.calc_push_byte_size = function(type_name, val) {
+      const deser = new ViewDeserializer({types: this, data_view: null});
+      deser.push(type_name, val);
+      return deser.byte_offset;
+   };
+}
+
+// ------------------------------------
+
+/*
+function parse_val(data_iter, type) {
+   if (type.fields) {
+      const ret = {};
+      for (const [field_name, field_type] of type.fields) {
+         ret[field_name] = parse_val(data_iter, field_type);
+      }
+      return ret;
+   }
+
+   if (type.setget) {
+      type.BYTE_SIZE.defined;
+      const ret = type.setget(data_iter.view, data_iter.pos);
+      data_iter.pos += type.BYTE_SIZE;
+      return ret;
+   }
+
+   throw type;
+}
+
+function emit_val(data_iter, type, val) {
+   if (type.fields) {
+      for (const [field_name, field_type] of type.fields) {
+         emit_val(data_iter, field_type, val[field_name]);
+      }
+      return;
+   }
+
+   if (type.setget) {
+      type.BYTE_SIZE.defined;
+      if (data_iter.view) {
+         type.setget(data_iter.view, data_iter.pos, val);
+      }
+      data_iter.pos += type.BYTE_SIZE;
+      return;
+   }
+
+   throw type;
+}
+*/
+
+
+const IccProfile = {};
+IccProfile.TagSig = {
+   profileDescriptionTag: 'desc',
+   copyrightTag: 'cprt',
+   mediaWhitePointTag: 'wtpt',
+};
+IccProfile.RenderingIntent = {
+   Perceptual: 0,
+   MediaRelativeColorimetric: 1,
+   Saturation: 2,
+   IccAbsoluteColorimetric: 3,
+};
+const D50_XYZ = {
+   x: 0.9652,
+   y: 1.0000,
+   z: 0.8249,
+};
+
+/*
+IccProfile.make_default = function() {
+   const profile = {
+      header: {
+         profile_size: -1,
+         preferred_cmm_type: 0,
+         profile_version_number: 0x04400000,
+         profile_or_device_class: 'spac',
+         color_space_of_data: 'RGB ',
+         pcs: 'XYZ ',
+         profile_file_sig: 'acsp',
+         primary_platform_sig: '\0\0\0\0',
+         profile_flags: 0,
+         device_manufacturer: '\0\0\0\0',
+         device_model: '\0\0\0\0',
+         device_attribs: '\0\0\0\0',
+         rendering_intent: IccProfile.RenderingIntent.Perceptual,
+         illuminant_ciexyz: D50_XYZ,
+         creator_sig: 'klcg',
+         profile_id: new Uint8Array(16),
+         reserved: new Uint8Array(28),
+      },
+      tag_table: {},
+   };
+   profile.tag_table[IccProfile.TagSig.profileDescriptionTag] = 'via icc-profile-editor.html';
+   profile.tag_table[IccProfile.TagSig.copyrightTag] = 'public domain';
+   profile.tag_table[IccProfile.TagSig.mediaWhitePointTag] = 'via icc-profile-editor.html';
+         {
+            sig: ,
+            data: ,
+         },{
+            sig: IccProfile.TagSig.copyrightTag,
+            data: 'public domain',
+         },{
+            sig: IccProfile.TagSig.mediaWhitePointTag,
+            data: {
+               sig: 'XYZ ',
+               reserved: 0,
+               values: [D65_XYZ],
+            },
+         },
+      ],
+   };
+};
+*/
+
+IccProfile.TYPES = new TypeContext('big');
+IccProfile.TYPES.add_types({
+   s15Fixed16Number: new FixedPointType('i16', 'u16'),
+   u8Fixed8Number: new FixedPointType('u8', 'u8'),
+   DateTimeNumber: {
+      year: 'u16',
+      month: 'u16',
+      day: 'u16',
+      hour: 'u16',
+      minute: 'u16',
+      second: 'u16',
+   },
+   XYZNumber: {
+      x: 's15Fixed16Number',
+      y: 's15Fixed16Number',
+      z: 's15Fixed16Number',
+   },
+   ProfileVersion: {
+      major: 'u8',
+      minor4_bugfix4: 'u8',
+      reserved: 'zero[2]',
+   },
+   Header: {
+      profile_size: 'u32',
+      preferred_cmm_type: 'ascii[4]',
+      profile_version_number: 'ProfileVersion',
+      profile_or_device_class: 'ascii[4]',
+      color_space_of_data: 'ascii[4]',
+      pcs: 'ascii[4]',
+      date_and_time_created: 'DateTimeNumber',
+      profile_file_sig: 'ascii[4]',
+      primary_platform_sig: 'ascii[4]',
+      profile_flags: 'u32',
+      device_manufacturer: 'ascii[4]',
+      device_model: 'ascii[4]',
+      device_attribs: 'u32[2]',
+      rendering_intent: 'u32',
+      illuminant_ciexyz: 'XYZNumber',
+      creator_sig: 'ascii[4]',
+      profile_id: 'u8[16]',
+      reserved: 'zero[28]',
+   },
+   TagTableEntry: {
+      tag_sig: 'ascii[4]',
+      data_start: 'u32',
+      size: 'u32',
+   },
+   TagHeader: {
+      type_sig: 'ascii[4]',
+      reserved: 'zero[4]',
+   },
+   TagType: {
+      pop: tag_viewer => {
+         const peek = tag_viewer.clone();
+         const tag_head = peek.pop('TagHeader');
+         const type_sig = tag_head.type_sig;
+
+         const tag_type = IccProfile.TAG_TYPE_BY_TYPE_SIG[type_sig] || 'UnknownTagType';
+         const tag = tag_viewer.pop(tag_type);
+         if (tag_type == 'UnknownTagType') {
+            console.warn(`Unknown type_sig '${tag.head.type_sig}':`, tag);
+            function is_char_code_ascii(c) {
+               return 0x20 <= c && c <= 127;
+            };
+            const char_codes = [].map.call(tag.head.type_sig, c => c.charCodeAt());
+            char_codes.forEach(c => {
+               if (!is_char_code_ascii(c)) throw char_codes;
+            });
+         }
+         return tag;
+      },
+      push: (tag_deser, tag) => {
+         console.assert(tag.head, tag);
+         const type_sig = tag.head.type_sig;
+         const tag_type = IccProfile.TAG_TYPE_BY_TYPE_SIG[type_sig] || 'UnknownTagType';
+         tag_deser.push(tag_type, tag);
+      },
+   },
+   UnknownTagType: {
+      head: 'TagHeader',
+      data: 'u8[]',
+   },
+   AlignedTagType: {
+      pop: deser => {
+         deser.pad_to_alignment(4);
+         return deser.pop('TagType');
+      },
+      push: (deser, tag) => {
+         deser.pad_to_alignment(4);
+         deser.push('TagType', tag);
+      }
+   },
+   multiLocalizedUnicodeRecord: {
+      lang_code: 'ascii[2]',
+      country_code: 'ascii[2]',
+      string_length: 'u32',
+      string_offset: 'u32',
+   },
+   multiLocalizedUnicodeType_Partial: {
+      head: 'TagHeader',
+      num_records: 'u32',
+      record_size: 'u32',
+      // records: 'multiLocalizedUnicodeRecord[num_records]',
+      // data: 'u8[]',
+   },
+   multiLocalizedUnicodeType: {
+      pop: tag_deser => {
+         const tag = tag_deser.pop('multiLocalizedUnicodeType_Partial');
+         console.assert(tag.record_size == 12, tag);
+         const records_t = `multiLocalizedUnicodeRecord[${tag.num_records}]`;
+         const records = tag_deser.pop(records_t);
+         const str_by_lang_country_code = {};
+         records.forEach(record => {
+            FUSE.tick();
+            const lang_country_code = `${record.lang_code}-${record.country_code}`;
+            const str_deser = tag_deser.subview_n(record.string_offset, record.string_length);
+            const str = str_deser.pop(`utf16[]`);
+            console.log(7, str);
+            str_by_lang_country_code[lang_country_code] = str;
+         });
+         tag_deser.pop_bytes(); // skip to end of tag
+         tag.str_by_lang_country_code = str_by_lang_country_code;
+         return tag;
+      },
+
+      push: (tag_deser, tag) => {
+         const records = Object.entries(tag.str_by_lang_country_code).map(
+            ([lang_country_code, str]) => {
+               console.log({lang_country_code});
+               const [lang_code, country_code] = lang_country_code.split('-');
+               const record = {
+                  lang_code,
+                  country_code,
+                  str,
+                  string_length: NaN,
+                  string_offset: NaN,
+               };
+               console.log('record pre', record);
+               return record;
+            }
+         );
+         tag.num_records = records.length;
+         tag.record_size = 12;
+         tag_deser.push('multiLocalizedUnicodeType_Partial', tag);
+         const records_t = `multiLocalizedUnicodeRecord[${tag.num_records}]`;
+         const records_pass2_deser = tag_deser.clone();
+         if (tag_deser.byte_offset != records_pass2_deser.byte_offset) throw {tag_deser, records_pass2_deser};
+         console.log(53, {records});
+         tag_deser.push(records_t, records);
+         records.forEach(record => {
+            // JS .length is utf16 len not unicode len.
+            const n = record.str.length;
+            const str_t = `utf16[${n}]`;
+            record.string_offset = tag_deser.byte_offset;
+            console.log('record mid', record);
+            tag_deser.push(str_t, record.str);
+            record.string_length = tag_deser.byte_offset - record.string_offset;
+            console.log('record post', record);
+         });
+         records_pass2_deser.push(records_t, records);
+      },
+   },
+   signatureType: {
+      head: 'TagHeader',
+      signature: 'ascii[4]',
+   },
+   XYZType: {
+      head: 'TagHeader',
+      values: 'XYZNumber[]',
+   },
+   s15Fixed16ArrayType: {
+      head: 'TagHeader',
+      values: 's15Fixed16Number[]',
+   },
+
+   curveType_Partial: {
+      head: 'TagHeader',
+      n: 'u32',
+      // values: 'u16[n]',
+   },
+   curveType: {
+      pop: deser => {
+         const tag = deser.pop('curveType_Partial');
+         tag.values = [];
+         if (tag.n) {
+            const elem_t = (tag.n == 1) ? 'u8Fixed8Number' : 'u16';
+            const values_t = `${elem_t}[${tag.n}]`;
+            tag.values = deser.pop(values_t);
+         }
+         return tag;
+      },
+      push: (deser, tag) => {
+         tag.n = tag.values.length;
+         deser.push('curveType_Partial', tag);
+         if (tag.n) {
+            const elem_t = (tag.n == 1) ? 'u8Fixed8Number' : 'u16';
+            const values_t = `${elem_t}[${tag.n}]`;
+            deser.push(values_t, tag.values);
+         }
+      },
+   },
+
+   parametricCurveType_Partial: {
+      head: 'TagHeader',
+      func_type: 'u16',
+      padding: 'zero[2]',
+      // params: 's15Fixed16Number[n]',
+   },
+   parametricCurveType: {
+      PARAM_COUNT_BY_FUNC_TYPE: {
+            0: 'g'.length,
+            1: 'gab'.length,
+            2: 'gabc'.length,
+            3: 'gabcd'.length,
+            4: 'gabcdef'.length,
+      },
+      pop: function(deser) {
+         const tag = deser.pop('parametricCurveType_Partial');
+         const param_count = this.PARAM_COUNT_BY_FUNC_TYPE[tag.func_type] || panic(tag);
+
+         const params_t = `s15Fixed16Number[${param_count}]`;
+         tag.params = deser.pop(params_t);
+         return tag;
+      },
+      push: function(deser, tag) {
+         const FUNC_TYPE_BY_PARAM_COUNT = map_key_by_value(this.PARAM_COUNT_BY_FUNC_TYPE);
+         const param_count = tag.params.length;
+         tag.func_type = FUNC_TYPE_BY_PARAM_COUNT[param_count] || panic(tag);
+         deser.push('parametricCurveType_Partial', tag);
+
+         const params_t = `s15Fixed16Number[${param_count}]`;
+         deser.push(params_t, tag.params);
+      },
+   },
+
+   lutAToBType_CLUT_Partial: {
+      grid_points_by_dim: 'u8[16]',
+      elem_byte_count: 'u8',
+      reserved: 'zero[3]',
+      // values: (u8 or u16)[n]
+   },
+   lutAToBType_Partial: {
+      head: 'TagHeader',
+      num_input_channels: 'u8',
+      num_output_channels: 'u8',
+      reserved: 'zero[2]',
+      b_curve_offset: 'u32',
+      matrix_offset: 'u32',
+      m_curve_offset: 'u32',
+      clut_offset: 'u32',
+      a_curve_offset: 'u32',
+      // data: 'u8[]',
+   },
+   lutAToBType: { // Also handles lutBToAType
+      n_by_name: function(tag) {
+         const n_by_name = {};
+         if (tag.head.type_sig == 'mAB ') {
+            n_by_name.a_curves = tag.num_input_channels;
+            n_by_name.m_curves = tag.num_output_channels;
+            n_by_name.b_curves = tag.num_output_channels;
+         } else if (tag.head.type_sig == 'mBA ') {
+            n_by_name.b_curves = tag.num_input_channels;
+            n_by_name.m_curves = tag.num_input_channels;
+            n_by_name.a_curves = tag.num_output_channels;
+         } else {
+            throw tag;
+         }
+         return n_by_name;
+      },
+      pop: function(deser) {
+         const tag = deser.pop('lutAToBType_Partial');
+         const n_by_name = this.n_by_name(tag);
+
+         // -
+
+         if (tag.a_curve_offset) {
+            const offset_deser = deser.subview(tag.a_curve_offset);
+            tag.a_curves = Array(n_by_name.a_curves).fill().map(
+               () => offset_deser.pop('AlignedTagType')
+            );
+         }
+
+         if (tag.clut_offset) {
+            const offset_deser = deser.subview(tag.clut_offset);
+            const clut = offset_deser.pop('lutAToBType_CLUT_Partial');
+            console.log('partial_.pop lutAToBType_CLUT_Partial', offset_deser.byte_offset);
+
+            clut.grid_points_by_dim = clut.grid_points_by_dim.slice(0, tag.num_input_channels);
+            const box = {
+               values_count: tag.num_output_channels,
+            };
+            clut.grid_points_by_dim.forEach(v => {
+               box.values_count *= v;
+            });
+
+            const elem_t = (clut.elem_byte_count == 2) ? 'u16' : 'u8';
+            const values_t = `${elem_t}[${box.values_count}]`;
+            clut.values = offset_deser.pop(values_t);
+            console.log('partial_.pop values', values_t, offset_deser.byte_offset);
+
+            tag.clut = clut;
+         }
+
+         if (tag.m_curve_offset) {
+            const offset_deser = deser.subview(tag.m_curve_offset);
+            tag.m_curves = Array(n_by_name.m_curves).fill().map(
+               () => offset_deser.pop('AlignedTagType')
+            );
+         }
+
+         if (tag.matrix_offset) {
+            console.assert(tag.num_output_channels == 3, tag);
+            const offset_deser = deser.subview(tag.matrix_offset);
+            tag.matrix = offset_deser.pop(`s15Fixed16Number[12]`);
+         }
+
+         if (tag.b_curve_offset) {
+            const offset_deser = deser.subview(tag.b_curve_offset);
+            tag.b_curves = Array(n_by_name.b_curves).fill().map(
+               () => offset_deser.pop('AlignedTagType')
+            );
+         }
+
+         // -
+
+         console.assert(!tag.a_curves == !tag.clut, tag);
+         if (!tag.clut) {
+            console.assert(tag.num_input_channels == tag.num_output_channels, tag);
+         }
+         console.assert(!tag.m_curves == !tag.matrix, tag);
+         if (tag.matrix) {
+            console.assert(tag.num_output_channels == 3, tag);
+         }
+         console.assert(tag.b_curves, tag);
+
+         deser.pop_bytes(); // seek to end of tag.
+
+         console.log('partial_pass2_deser.pop', tag);
+         return tag;
+      },
+      push: function(deser, tag) {
+         console.assert(!tag.a_curves == !tag.clut, tag);
+         if (!tag.clut) {
+            console.assert(tag.num_input_channels == tag.num_output_channels, tag);
+         }
+         console.assert(!tag.m_curves == !tag.matrix, tag);
+         if (tag.matrix) {
+            console.assert(tag.num_output_channels == 3, tag);
+         }
+         console.assert(tag.b_curves, tag);
+
+         // -
+
+         const n_by_name = this.n_by_name(tag);
+         const partial_pass2_deser = deser.clone();
+         deser.push('lutAToBType_Partial', tag);
+
+         // -
+
+         const parts = [];
+         if (tag.a_curves) {
+            parts.push([tag.a_curve_offset, () => {
+               deser.pad_to_alignment(4);
+               tag.a_curve_offset = deser.byte_offset;
+               if (tag.a_curves.length != n_by_name.a_curves) throw tag;
+               tag.a_curves.forEach(
+                  curve => deser.push('AlignedTagType', curve)
+               );
+            }]);
+         }
+
+         if (tag.clut) {
+            parts.push([tag.clut_offset, () => {
+               deser.pad_to_alignment(4);
+               tag.clut_offset = deser.byte_offset;
+
+               const clut = tag.clut;
+               deser.push('lutAToBType_CLUT_Partial', clut);
+               console.log('partial_.push lutAToBType_CLUT_Partial', deser.byte_offset - tag.clut_offset);
+               if (deser.byte_offset - tag.clut_offset != 20) throw 20;
+
+               if (clut.grid_points_by_dim.length != tag.num_input_channels) throw tag;
+               const box = {
+                  values_count: tag.num_output_channels,
+               };
+               clut.grid_points_by_dim.forEach(v => {
+                  box.values_count *= v;
+               });
+               if (clut.values.length != box.values_count) throw {tag, values_count: box.values_count};
+               const elem_t = (clut.elem_byte_count == 2) ? 'u16' : 'u8';
+               const values_t = `${elem_t}[${box.values_count}]`;
+               deser.push(values_t, clut.values);
+               console.log('partial_.push values', deser.byte_offset - tag.clut_offset);
+            }]);
+         }
+
+         if (tag.m_curves) {
+            parts.push([tag.m_curve_offset, () => {
+               deser.pad_to_alignment(4);
+               tag.m_curve_offset = deser.byte_offset;
+               if (tag.m_curves.length != n_by_name.m_curves) throw tag;
+               tag.m_curves.forEach(
+                  curve => deser.push('AlignedTagType', curve)
+               );
+            }]);
+         }
+
+         if (tag.matrix) {
+            parts.push([tag.matrix_offset, () => {
+               deser.pad_to_alignment(4);
+               tag.matrix_offset = deser.byte_offset;
+               deser.push(`s15Fixed16Number[12]`, tag.matrix);
+            }]);
+         }
+
+         if (tag.b_curves) {
+            parts.push([tag.b_curve_offset, () => {
+               deser.pad_to_alignment(4);
+               tag.b_curve_offset = deser.byte_offset;
+               if (tag.b_curves.length != n_by_name.b_curves) throw tag;
+               tag.b_curves.forEach(
+                  curve => deser.push('AlignedTagType', curve)
+               );
+            }]);
+         }
+
+         tag.a_curve_offset = 0;
+         tag.clut_curve_offset = 0;
+         tag.m_curve_offset = 0;
+         tag.matrix_offset = 0;
+         tag.b_curve_offset = 0;
+
+         // Sort and write out in order of offsets
+         parts.sort((a,b) => a[0] - b[0]);
+         parts.forEach(([offset, fn]) => fn());
+
+         // -
+         console.log('partial_pass2_deser.push', tag);
+         partial_pass2_deser.push('lutAToBType_Partial', tag);
+      },
+   },
+   lutBToAType: 'lutAToBType',
+});
+
+// -
+
+IccProfile.DateTimeNumber = function() {
+   const d = new Date();
+   return {
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      day: d.getDay(),
+      hour: d.getHours(),
+      minute: d.getMinutes(),
+      second: d.getSeconds(),
+   };
+}
+IccProfile.Header = function() {
+   return {
+      profile_size: 0,
+      preferred_cmm_type: '',
+      profile_version_number: {major:0,minor4_bugfix4:0,reserved: [0,0]},
+      profile_or_device_class: '',
+      color_space_of_data: '',
+      pcs: '',
+      date_and_time_created: new IccProfile.DateTimeNumber(),
+      profile_file_sig: '',
+      primary_platform_sig: '',
+      profile_flags: 0,
+      device_manufacturer: '',
+      device_model: '',
+      device_attribs: [0,0],
+      rendering_intent: 0,
+      illuminant_ciexyz: D50_XYZ,
+      creator_sig: '',
+      profile_id: new Uint8Array(16),
+      reserved: new Uint8Array(28),
+   };
+}
+console.assert(IccProfile.TYPES.calc_push_byte_size('Header', IccProfile.Header()) == 128, IccProfile.TYPES.get_type('Header'));
+
+
+
+IccProfile.TAG_TYPE_NAME_BY_TAG_SIG = {
+   'cprt': 'copyrightTag',
+   'chad': 'chromaticAdaptationTag',
+   'A2B0': 'AToB0Tag',
+};
+
+IccProfile.TAG_TYPE_BY_TYPE_SIG = {
+   'XYZ ': 'XYZType',
+   'mluc': 'multiLocalizedUnicodeType',
+   'sf32': 's15Fixed16ArrayType',
+   'sig ': 'signatureType',
+   'mAB ': 'lutAToBType',
+   'mBA ': 'lutBToAType',
+   'curv': 'curveType',
+   'para': 'parametricCurveType',
+};
+
+IccProfile.from_bytes = function(data_view) {
+   const viewer = new ViewDeserializer({
+      data_view, types: IccProfile.TYPES,
+   });
+
+   const profile = window.profile = {};
+   profile.header = viewer.pop('Header');
+   console.log('header', {profile});
+   console.log(viewer.byte_offset);
+
+   const tag_count = viewer.pop('u32');
+   const tag_table = viewer.pop(`TagTableEntry[${tag_count}]`);
+   console.log({tag_count, tag_table});
+
+   const tag_by_tag_sig = profile.tag_table = {};
+   const tag_sig_by_i = {};
+   tag_table.forEach((entry,i) => {
+      const tag_sig = entry.tag_sig;
+      console.assert(!tag_sig_by_i[tag_sig], 'Duplicate tag:', {entry, i, dupe_of_i: tag_sig_by_i[tag_sig]});
+      tag_sig_by_i[tag_sig] = i;
+
+      const tag_viewer = viewer.subview_n(entry.data_start, entry.size);
+      const tag = tag_viewer.pop('TagType');
+      tag_by_tag_sig[tag_sig] = tag;
+   });
+
+   return profile;
+}
+
+// -
+/*
+function Serializer(type_context) {
+   this.parts = [];
+
+   this.serialize = function(type, obj) {
+      if (typeof(type) == 'string') {
+         const type_name = type;
+         type = type_context.get_type(type_name);
+         if (!type) throw {type_name};
+      }
+      const part = new ArrayBuffer(type.BYTE_SIZE);
+      const dv = new DataView(part);
+      type.serialize(dv, 0, obj);
+      this.parts.push(part);
+   };
+
+   this.blob = function() {
+      const ICC_PROFILE_MIME = 'application/vnd.iccprofile';
+      return new Blob(this.parts, {type: ICC_PROFILE_MIME});
+   }
+
+   this.buffer = function() {
+      let size = 0;
+      this.parts.forEach(p => {
+         size += p.length;
+      });
+      const merged = new ArrayBuffer(size);
+      const dst = new Uint8Array(merged);
+      let pos = 0;
+      this.parts.forEach(p => {
+         const src = new Uint8Array(p);
+         dst.set(src, pos);
+         pos += p.length;
+      });
+      this.parts = [merged];
+      return merged;
+   }
+}
+*/
+function download_blob(filename, blob) {
+   const url = URL.createObjectURL(blob);
+
+   const link = document.createElement('a');
+   link.href = url;
+   link.download = filename;
+   document.body.appendChild(link);
+   link.click();
+
+   document.body.removeChild(link);
+   URL.revokeObjectURL(url);
+}
+
+// -
+
+function stringify_replacer(k, v) {
+   if (ArrayBuffer.isView(v)) return [].slice.call(v);
+   if (v.length > 100) {
+      return `${v.constructor.name}(${v.length})`;
+   }
+   return v;
+}
+
+e_import.addEventListener('input', async e => {
+   if (!e_import.files.length)
+      return;
+   const f = e_import.files[0];
+   const ab = await f.arrayBuffer();
+   const dv = new DataView(ab);
+   const profile = IccProfile.from_bytes(dv);
+   console.log({profile});
+   const t = JSON.stringify(profile, stringify_replacer, 3);
+   e_text.value = t;
+});
+e_export.addEventListener('click', async e => {
+   const t = e_text.value;
+   const p = JSON.parse(t);
+   const s = new Serializer(ICC_PROFILE_TYPES);
+   s.serialize('Header', p.header);
+   s.serialize('u32', p.tag_table.length);
+   for (const tag of p.tag_table) {
+      s.serialize(tag);
+   }
+   const b = s.blob();
+   download_blob('profile.icc', b);
+});
+      </script>
+   </body>
+</html>
