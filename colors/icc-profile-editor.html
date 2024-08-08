@@ -14,7 +14,10 @@ h2 {
    </head>
    <body>
       <fieldset><legend>Log</legend>
-         <pre id=e_log style='margin: 0; height: 20em; overflow: scroll;'></pre>
+         <details>
+            <summary id=e_log_tip style='white-space: pre;'></summary>
+            <pre id=e_log_body style='margin: 0; height: 20em; overflow: scroll;'></pre>
+         </details>
       </fieldset>
       <hr>
       <fieldset>
@@ -1331,7 +1334,8 @@ function json_stringify_replacer_typedarrays(k, v) {
 }
 
 function log(line) {
-   e_log.textContent = `[@ ${performance.now()} ms] ${line}\n` + e_log.textContent;
+   e_log_body.textContent = e_log_tip.textContent + '\n' + e_log_body.textContent;
+   e_log_tip.textContent = `[@ ${performance.now()} ms] ${line}`;
 }
 
 
@@ -1351,8 +1355,8 @@ e_import.addEventListener('input', async e => {
    log(`Importing...`);
    const profile = IccProfile.from_bytes(bytes);
 
-   log(`Open successful.`);
    console.log({profile});
+   log(`Loading UI...`);
 
    // -
 
@@ -1498,7 +1502,10 @@ e_import.addEventListener('input', async e => {
       }
    );
 
+   log(`Refreshing...`);
    profile.edn.signal('refresh', 'self');
+
+   log(`Open succeeded.`);
 });
 
 async function serialize_to_bytes() {
@@ -1525,11 +1532,13 @@ e_export.addEventListener('click', async e => {
    const bytes = await serialize_to_bytes();
 
    const file_name = e_file_name.value || 'profile.icc';
-   log(`Saving to '${file_name}...'`);
+   log(`Saving '${file_name}...'`);
    const ICC_PROFILE_MIME = 'application/vnd.iccprofile';
    const blob = new Blob([bytes], {type: ICC_PROFILE_MIME});
    download_blob(file_name, blob);
 });
+
+log('Ready!');
       </script>
    </body>
 </html>
