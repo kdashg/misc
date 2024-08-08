@@ -2,16 +2,47 @@
 <html>
    <head>
       <meta charset=utf-8>
+      <style>
+h1 {
+   margin-top: 0.1em;
+   margin-bottom: 0.1em;
+}
+h2 {
+   margin: 0;
+}
+      </style>
    </head>
    <body>
-      Import: <input id=e_import type=file>
-      <br><i id=e_import_hash></i>
+      <fieldset><legend>Log</legend>
+         <pre id=e_log style='margin: 0; height: 20em; overflow: scroll;'></pre>
+      </fieldset>
       <hr>
-      Export: <input id=e_export_name type=text value=profile.icc> <input id=e_export type=button value=Export>
-      <br><i id=e_export_hash></i>
-      <hr>
-      <textarea id=e_text style='width: 100%; height: 50vh;'>
-      </textarea>
+      <fieldset>
+         <legend>
+            <h1>
+               IccProfile |
+               <input id=e_import type=file> |
+               <input id=e_hash type=button value=Hash> |
+               <input id=e_export type=button value='Save As...'> <input id=e_file_name type=text value=profile.icc size=30> |
+            </h1>
+         </legend>
+         <details>
+            <summary>Raw JSON</summary>
+            <pre id=e_raw_json></pre>
+         </details>
+         <fieldset><legend><h2>Index</h2></legend>
+            <ul style='margin: 0;'>
+               <li><a href=#a_header>Header</a>
+               <li><a href=#a_tag_table>Tag Table</a>
+                  <ol id=e_tag_index>
+                  </ol>
+            </ul>
+         </fieldset>
+         <div id=e_header_parent></div>
+         <fieldset id=a_tag_table><legend><h2>Tag Table</h2></legend>
+            <div id=e_tag_table></div>
+         </fieldset>
+      </fieldset>
       <script>
 
 // -
@@ -109,7 +140,6 @@ class ViewDeserializer {
    }
 
    subview(start, end) {
-      console.log(this, `.subview(`, {start, end}, `)`);
       start = start || 0;
       const ret = this.clone();
 
@@ -121,7 +151,6 @@ class ViewDeserializer {
    }
 
    subview_n(start, n) {
-      console.log(this, `.subview_n(`, {start, n}, `)`);
       start = start || 0;
       return this.subview(start, start+n);
    }
@@ -173,17 +202,7 @@ class ViewDeserializer {
       if (typeof(type) == 'string') {
          type = this.types.get_type(type);
       }
-      /*
-      let log = () => {
-         const indent = this.indent();
-         let args = [].slice.call(arguments);
-         console.log({args});
-         if (indent) {
-            args.unshift(indent.slice(0,indent.length-1));
-         }
-         console.log(...args);
-      };
-      */
+
       const log = !(type.name == 'utf16' || type.name == 'u16');
 
       const byte_offset_start = this.byte_offset;
@@ -195,7 +214,7 @@ class ViewDeserializer {
       console.assert(ret !== undefined, type.name);
       this._pop_depth -= 1;
 
-      if (log) console.log(`${this.indent()}=> ${type.name}`, ret);
+      if (log) console.log(`${this.indent()} (pop<${type.name}>) => `, ret, `, @+${this.byte_offset}`);
 
       // -
       // Check that push works!
@@ -220,7 +239,7 @@ class ViewDeserializer {
 
       this.byte_offset = byte_offset_start;
       const input_bytes = this.view_n(byte_size);
-      if (log) console.log(`${this.indent()}`, {input_bytes, output_bytes});
+      //if (log) console.log(`${this.indent()}`, {input_bytes, output_bytes});
       this.byte_offset = byte_offset_end;
 
       // Ensure still zeroed.
@@ -229,10 +248,10 @@ class ViewDeserializer {
       });
 
       // Push!
-      if (log) console.log(`${this.indent()}`, 'pre-push', type, ret, test_deser.byte_offset, byte_offset_start);
+      //if (log) console.log(`${this.indent()}`, 'pre-push', type, ret, test_deser.byte_offset, byte_offset_start);
       console.assert(type.push, type);
       type.push(test_deser, ret);
-      if (log) console.log(`${this.indent()}`, 'post-push', type, test_deser.byte_offset, byte_offset_end, this.byte_offset);
+      //if (log) console.log(`${this.indent()}`, 'post-push', type, test_deser.byte_offset, byte_offset_end, this.byte_offset);
 
       // Check that we ended in the same place.
       if (test_deser.byte_offset != this.byte_offset) {
@@ -265,17 +284,14 @@ class ViewDeserializer {
       }
 
       const indent = this.indent();
-      let log = function() { console.log(...arguments); }
-      if (['utf16', 'u16', 'zero'].includes(type.name)) {
-         log = () => undefined;
-      }
-      log(`${indent}ViewDeserializer<${this.data_view && this.data_view.byteOffset}>.push(${type.name},`, val, `) @+${this.byte_offset}`);
+      const log = !['utf16', 'u16', 'zero'].includes(type.name);
+      if (log) console.log(`${indent}ViewDeserializer<${this.data_view && this.data_view.byteOffset}>.push(${type.name},`, val, `) @+${this.byte_offset}`);
 
       this._pop_depth += 1;
       type.push(this, val);
       this._pop_depth -= 1;
 
-      log(`${indent}=> @+${this.byte_offset}`);
+      if (log) console.log(`${indent} (push<${type.name}>) => @+${this.byte_offset}`);
    }
 }
 
@@ -372,7 +388,6 @@ function FixedPointType(whole_type_name, fract_type_name) {
       const whole = deser.pop(whole_type_name);
       const fract_bits = deser.pop(fract_type_name);
       const ret = whole + (fract_bits / fract_divisor);
-      //console.log({whole, fract_bits, ret});
       return ret;
    };
 }
@@ -393,15 +408,11 @@ function ArrayType(elem_type, elem_count) {
       if (this.elem_count >= 0) { // Handles NaN
          n = this.elem_count;
       }
-      console.log({src});
-      console.log('record p array push', {n, this:this, src:src.slice()});
       let ii = 0;
       for (const i of range(n)) {
-         //console.log('record p', {src,i,v:src[i]});
          deser.push(this.elem_type, src[i]);
          ii += 1;
       }
-      console.log('record p array push ii', {ii});
    };
 
    this.pop = function(deser) {
@@ -470,7 +481,6 @@ function StructType(field_type_by_name) {
    this.pop = function(view_serializer) {
       const ret = {};
       for (const [field_name, field_type] of Object.entries(field_type_by_name)) {
-         console.log({field_name, field_type});
          const field_val = view_serializer.pop(field_type);
          if (!field_val._reserved) {
             ret[field_name] = field_val;
@@ -508,7 +518,7 @@ function TypeContext(default_endian) {
       type.name = type_name;
       if (typeof(type.pop) == 'function') {
          Object.defineProperty(type.pop, 'name', {
-            value: `popp$<${type_name}>`,
+            value: `pop$<${type_name}>`,
          });
       }
       if (typeof(type.push) == 'function') {
@@ -516,7 +526,6 @@ function TypeContext(default_endian) {
             value: `push<${type_name}>`,
          });
       }
-      console.log(type.name, type.pop.name);
    }
 
    this.add_types = function(schema_by_type_name) {
@@ -764,8 +773,6 @@ IccProfile.TYPES.add_types({
             const lang_country_code = `${record.lang_code}-${record.country_code}`;
             const str_deser = tag_deser.subview_n(record.string_offset, record.string_length);
             const str = str_deser.pop(`utf16[]`);
-            console.log(7, str);
-            console.log('record pop', {record, str});
             str_by_lang_country_code[lang_country_code] = str;
          });
          tag_deser.pop_bytes(); // skip to end of tag
@@ -777,7 +784,6 @@ IccProfile.TYPES.add_types({
          const tag_start_offset = tag_deser.byte_offset;
          const records = Object.entries(tag.str_by_lang_country_code).map(
             ([lang_country_code, str]) => {
-               console.log({lang_country_code});
                const [lang_code, country_code] = lang_country_code.split('-');
                const record = {
                   lang_code,
@@ -786,7 +792,6 @@ IccProfile.TYPES.add_types({
                   string_length: NaN,
                   string_offset: NaN,
                };
-               console.log('record pre', record);
                return record;
             }
          );
@@ -796,18 +801,15 @@ IccProfile.TYPES.add_types({
          const records_t = `multiLocalizedUnicodeRecord[${tag.num_records}]`;
          const records_pass2_deser = tag_deser.clone();
          if (tag_deser.byte_offset != records_pass2_deser.byte_offset) throw {tag_deser, records_pass2_deser};
-         console.log(53, {records});
          tag_deser.push(records_t, records);
          records.forEach(record => {
             // JS .length is utf16 len not unicode len.
             const n = record.str.length;
             const str_t = `utf16[${n}]`;
             record.string_offset = tag_deser.byte_offset - tag_start_offset;
-            console.log('record pmid', record);
             tag_deser.push(str_t, record.str);
             const end_offset = tag_deser.byte_offset - tag_start_offset;
             record.string_length = end_offset - record.string_offset;
-            console.log('record post', str_t, record.string_length, tag_deser.byte_offset, tag, record);
          });
          records_pass2_deser.push(records_t, records);
       },
@@ -922,7 +924,6 @@ IccProfile.TYPES.add_types({
       pop: function(deser) {
          const tag = deser.pop('lutAToBType_Partial');
          const n_by_name = this.n_by_name(tag);
-         console.log('lutAToBType pop', {tag});
 
          // -
 
@@ -936,7 +937,6 @@ IccProfile.TYPES.add_types({
          if (tag.clut_offset) {
             const offset_deser = deser.subview(tag.clut_offset);
             const clut = offset_deser.pop('lutAToBType_CLUT_Partial');
-            console.log('partial_.pop lutAToBType_CLUT_Partial', offset_deser.byte_offset);
 
             clut.grid_points_by_dim = clut.grid_points_by_dim.slice(0, tag.num_input_channels);
             const box = {
@@ -950,10 +950,7 @@ IccProfile.TYPES.add_types({
             const values_t = `${elem_t}[${box.values_count}]`;
             const unorm_values = offset_deser.pop(values_t);
             const divisor = Math.pow(0x100, clut.elem_byte_count) - 1;
-            console.log('pop clut.values unorm', unorm_values.slice());
             clut.values = [].map.call(unorm_values, v => v / divisor);
-            console.log('pop clut.values float', clut.values.slice());
-            console.log('partial_.pop values', values_t, offset_deser.byte_offset);
 
             tag.clut = clut;
          }
@@ -992,7 +989,6 @@ IccProfile.TYPES.add_types({
 
          deser.pop_bytes(); // seek to end of tag.
 
-         console.log('partial_pass2_deser.pop', tag);
          return tag;
       },
       push: function(deser, tag) {
@@ -1012,7 +1008,6 @@ IccProfile.TYPES.add_types({
          const n_by_name = this.n_by_name(tag);
          const partial_pass2_deser = deser.clone();
          deser.push('lutAToBType_Partial', tag);
-         console.log('lutAToBType_Partial push pre', {tag});
 
          // -
 
@@ -1048,11 +1043,8 @@ IccProfile.TYPES.add_types({
                const elem_t = (clut.elem_byte_count == 2) ? 'u16' : 'u8';
                const values_t = `${elem_t}[${box.values_count}]`;
                const divisor = Math.pow(0x100, clut.elem_byte_count) - 1;
-               console.log('push clut.values float', clut.values.slice());
                const unorm_values = [].map.call(clut.values, v => Math.round(v * divisor));
-               console.log('push clut.values unorm', unorm_values.slice());
                deser.push(values_t, unorm_values);
-               console.log('partial_.push values', deser.byte_offset - tag.clut_offset);
             }]);
          }
 
@@ -1101,7 +1093,6 @@ IccProfile.TYPES.add_types({
 
          // -
          partial_pass2_deser.push('lutAToBType_Partial', tag);
-         console.log('lutAToBType_Partial push post', {tag});
       },
    },
    lutBToAType: 'lutAToBType',
@@ -1116,7 +1107,7 @@ IccProfile.TYPES.add_types({
          const profile = deser.pop('IccProfile_Partial');
          const tag_table_t = `TagTableEntry[${profile.tag_count}]`;
          const tag_table = deser.pop(tag_table_t);
-         console.log({profile, tag_table});
+         console.log('pop', {profile, tag_table});
 
          const tag_by_tag_sig = profile.tag_by_tag_sig = {};
          const tag_sig_by_i = {};
@@ -1319,46 +1310,224 @@ function hex_from_view(view) {
    return hex;
 }
 
+function json_stringify_replacer_typedarrays(k, v) {
+   if (ArrayBuffer.isView(v)) {
+      v = [].slice.call(v);
+   }
+/*
+   if (Array.isArray(v) && typeof(v[0]) == 'number' && v.length < 100) {
+      const as_str = JSON.stringify(v);
+      if (as_str.length < 100) {
+         v = as_str;
+      }
+   }
+*/
+   const OPAQUE_LONG_ARRAYS = false; // true will break Export.
+   if (OPAQUE_LONG_ARRAYS && v.length > 100) {
+      return `${v.constructor.name}(${v.length})`;
+   }
+
+   return v;
+}
+
+function log(line) {
+   e_log.textContent = `[@ ${performance.now()} ms] ${line}\n` + e_log.textContent;
+}
+
+
 e_import.addEventListener('input', async e => {
    if (!e_import.files.length)
       return;
    const f = e_import.files[0];
 
+   log(`Opening from '${f.name}'...`);
    const bytes = new Uint8Array(await f.arrayBuffer());
+   log(`Opened ${bytes.length} bytes.`);
+
    const hash_bytes = new Uint8Array(await crypto.subtle.digest('sha-256', bytes));
    const hash_str = hex_from_view(hash_bytes);
-   e_import_hash.textContent = `(sha-256:${hash_str})`;
+   log(`(sha-256:${hash_str})`);
 
+   log(`Importing...`);
    const profile = IccProfile.from_bytes(bytes);
+
+   log(`Open successful.`);
    console.log({profile});
 
-   const OPAQUE_LONG_ARRAYS = false; // true will break Export.
+   // -
 
-   const t = JSON.stringify(
-      profile,
-      (k, v) => {
-         if (ArrayBuffer.isView(v)) return [].slice.call(v);
-         if (OPAQUE_LONG_ARRAYS && v.length > 100) {
-            return `${v.constructor.name}(${v.length})`;
+   e_file_name.value = f.name;
+
+   e_raw_json.textContent = JSON.stringify(profile, json_stringify_replacer_typedarrays, 3);
+
+   function make_section() {
+      const root = document.createElement('fieldset');
+      let legend = root.appendChild(document.createElement('legend'));
+      legend = legend.appendChild(document.createElement('h2'));
+
+      const text = root.appendChild(document.createElement('pre'));
+      text.style = 'margin: 0;'
+      text.contentEditable = true;
+
+      const dotdotdot = root.appendChild(document.createElement('i'));
+      dotdotdot.textContent = '(...)';
+      dotdotdot.hidden = true;
+
+      legend.onclick = () => {
+         text.hidden = text.hidden ? undefined : true;
+         dotdotdot.hidden = dotdotdot.hidden ? undefined : true;
+      };
+
+      return {root, legend, text};
+   }
+
+   function remove_all_children(e) {
+      while (e.firstChild) { e.removeChild(e.firstChild); }
+   }
+
+   // -
+
+   class EventDagNode {
+      parents = new Set();
+      children = new Set();
+
+      constructor(parents, name) {
+         this.name = name;
+         parents.forEach(parent => parent.add_child(this));
+      }
+
+      add_child(child) {
+         this.children.add(child);
+         child.parents.add(this);
+      }
+
+      signal(name, propagate) {
+         const ALL = ['parents', 'children', 'self'];
+         if (propagate) {
+            if (!ALL.includes(propagate)) throw {propagate, ALL};
+
+            const fn_name = 'on' + name;
+            const fn = this[fn_name];
+            if (fn) {
+               //log(`[EventDagNode '${this.name}'].${fn_name}('${propagate}')`);
+               fn.call(this, propagate);
+            }
+            if (propagate == 'self') {
+               propagate = null;
+            }
          }
-         return v;
-      },
-      3
+
+         if (!propagate || propagate == 'parents') {
+            this.parents.forEach(parent => parent.signal(name, 'parents'));
+         }
+         if (!propagate || propagate == 'children') {
+            this.children.forEach(child => child.signal(name, 'children'));
+         }
+      }
+   };
+
+   profile.edn = new EventDagNode([], 'profile');
+   profile.edn.onrefresh = () => {
+      log(`Refreshing raw json...`);
+      e_raw_json.textContent = JSON.stringify(profile, json_stringify_replacer_typedarrays, 3);
+   };
+
+   // -
+
+   remove_all_children(e_header_parent);
+
+   {
+      const section = make_section();
+      section.root.id = 'a_header';
+      section.legend.textContent = 'Header';
+      section.profile = profile;
+      e_header_parent.appendChild(section.root);
+
+      // -
+
+      const edn = new EventDagNode([profile.edn], 'header');
+      edn.onrefresh = () => {
+         log(`Refreshing header...`);
+         const js = profile.header;
+         const t = JSON.stringify(js, json_stringify_replacer_typedarrays, 3);
+         section.text.textContent = t;
+      };
+      section.text.onblur = e => {
+         log(`Committing header...`);
+         const t = section.text.textContent;
+         const js = JSON.parse(t);
+         profile.header = js;
+         edn.signal('refresh');
+      };
+   }
+
+   // -
+
+   remove_all_children(e_tag_index);
+   remove_all_children(e_tag_table);
+
+   Object.entries(profile.tag_by_tag_sig).map(
+      ([tag_sig, tag], i, all) => {
+         const section = make_section();
+         section.root.id = 'a_tag_' + tag_sig;
+         section.legend.innerHTML = `<code>'${tag_sig}'</code> tag (as type <code>'${tag.head.type_sig}'</code>)`;
+         window[tag_sig] = section;
+         e_tag_table.appendChild(section.root);
+
+         let link = e_tag_index.appendChild(document.createElement('li'));
+         link = link.appendChild(document.createElement('a'));
+         link.href = '#' + section.root.id;
+         link.innerHTML = section.legend.innerHTML;
+
+         // -
+
+         const edn = new EventDagNode([profile.edn], tag_sig);
+         edn.onrefresh = () => {
+            log(`Refreshing '${tag_sig}'...`);
+            const js = profile.tag_by_tag_sig[tag_sig];
+            const t = JSON.stringify(js, json_stringify_replacer_typedarrays, 3);
+            section.text.textContent = t;
+         };
+         section.text.onblur = e => {
+            log(`Committing '${tag_sig}'...`);
+            const t = section.text.textContent;
+            const js = JSON.parse(t);
+            profile.tag_by_tag_sig[tag_sig] = js;
+            edn.signal('refresh');
+         };
+      }
    );
-   e_text.value = t;
+
+   profile.edn.signal('refresh', 'self');
 });
-e_export.addEventListener('click', async e => {
-   const t = e_text.value;
+
+async function serialize_to_bytes() {
+   const t = e_raw_json.textContent;
+
+   log(`Parsing...`);
    const p = JSON.parse(t);
 
+   log(`Exporting...`);
    const bytes = IccProfile.to_bytes(p);
+   log(`Exported to ${bytes.length} bytes.`);
+
    const hash_bytes = new Uint8Array(await crypto.subtle.digest('sha-256', bytes));
    const hash_str = hex_from_view(hash_bytes);
-   e_export_hash.textContent = `(sha-256:${hash_str})`;
+   log(`(sha-256:${hash_str})`);
 
+   return bytes;
+}
+
+e_hash.onclick = async e => {
+   await serialize_to_bytes();
+};
+e_export.addEventListener('click', async e => {
+   const bytes = await serialize_to_bytes();
+
+   const file_name = e_file_name.value || 'profile.icc';
+   log(`Saving to '${file_name}...'`);
    const ICC_PROFILE_MIME = 'application/vnd.iccprofile';
    const blob = new Blob([bytes], {type: ICC_PROFILE_MIME});
-   const file_name = e_export_name.value || 'profile.icc';
    download_blob(file_name, blob);
 });
       </script>
