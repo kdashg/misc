@@ -1,4 +1,4 @@
-# GLES30 State Tables as C++
+# OpenGL ES 3.0 (GLES30) Object State Tables as C++
 
 Spec PDF: [GL ES 3.0.6 (November 1, 2019)](https://registry.khronos.org/OpenGL/specs/es/3.0/es_spec_3.0.pdf)
 
