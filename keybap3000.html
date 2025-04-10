@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <meta charset=utf-8>
+   <meta name='viewport' content='width=device-width, initial-scale=1'>
+</head>
+<body>
+<h1><pre id=e_text></pre></h1>
+<hr>
+
+<li id=e_input_li><h3>&gt;<input id=e_input type=text></h3>
+<ul id=e_history>
+</ul>
+<textarea id=e_corpus>
+a
+b
+cd
+</textarea>
+<script>
+
+
+/*
+async function flash(e, color, frames=30) {
+   for (let i = 0; i < frames; i++) {
+      e.style.backgroundColor = `rgb(${color.join(',')})`;
+      await new Promise(requestAnimationFrame);
+      color = color.map(x => x / 2);
+   }
+}
+*/
+
+function chooseRandom(vals) {
+   const i = Math.floor(Math.random() * vals.length);
+   return vals[i];
+}
+
+const G = {
+   session_times: [],
+};
+
+e_input.addEventListener('change', e => {
+   if (e_input.value != e_text.textContent) return;
+
+   const li = e_history.insertBefore(document.createElement('li'), e_history.firstChild);
+
+   const pre = li.appendChild(document.createElement('pre'));
+   pre.textContent = e_input.value;
+
+   const div = li.appendChild(document.createElement('i'));
+   const now = performance.now();
+   if (G.last_complete) {
+      const diff = now - G.last_complete;
+      div.textContent = `(${diff|0}ms)`;
+   } else {
+      div.textContent = `(${new Date()})`;
+   }
+   G.last_complete = now;
+
+   e_input.value = '';
+
+   let corpus = e_corpus.textContent.split('\n');
+   corpus = corpus.map(x => x.strip());
+   corpus = corpus.filter(x => x.length && x != e_text.textContent);
+
+   e_text.textContent = chooseRandom(corpus);
+});
+</script>
+
+</body>
+</html>
